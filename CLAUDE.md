@@ -33,7 +33,7 @@ e dal menu contestuale di Esplora file.
    - `Ctrl` → **Strumenti** (comprimi, ritaglia, unisci, metadati…)
    - `Alt` → **Azioni** (copia in…, sposta in…, copia percorso, apri terminale, condividi)
    - anelli raggiungibili anche senza tastiera: un'icona al centro della ruota li cicla
-     fermandosi sopra ~400 ms.
+     fermandosi sopra ~800 ms (400 ms provato: troppo rapido).
 4. Lo spicchio sotto il cursore si evidenzia subito (`DragOver`, nessun ritardo
    percepibile); gli spicchi non applicabili sono assenti, non disabilitati.
 5. **Rilascio sullo spicchio** (`Drop`) → l'operazione parte in locale. Se il cursore esce

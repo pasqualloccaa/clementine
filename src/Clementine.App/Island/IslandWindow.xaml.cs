@@ -25,7 +25,7 @@ public partial class IslandWindow : Window
     readonly List<Path> _slices = [];
     readonly List<UIElement> _wheelItems = [];
     static readonly string[] RingNames = ["Converti", "Strumenti", "Azioni"];
-    static readonly TimeSpan HubDwell = TimeSpan.FromMilliseconds(400);
+    static readonly TimeSpan HubDwell = TimeSpan.FromMilliseconds(800); // 400 ms era troppo rapido all'uso
     IReadOnlyList<Operation>[] _rings = [];
     IReadOnlyList<Operation> _ops = [];
     Ring _ring, _manualRing;
@@ -250,7 +250,7 @@ public partial class IslandWindow : Window
             var onHub = dx * dx + dy * dy < HubRadius * HubRadius && ring == _manualRing;
             if (!onHub) _hubSince = null;
             else if (_hubSince is null) _hubSince = DateTime.UtcNow;
-            else if (DateTime.UtcNow - _hubSince >= HubDwell) // restando fermi gira ancora ogni 400 ms
+            else if (DateTime.UtcNow - _hubSince >= HubDwell) // restando fermi gira ancora a ogni intervallo
             {
                 ring = _manualRing = NextRing(_manualRing);
                 _hubSince = DateTime.UtcNow;

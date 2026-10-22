@@ -36,7 +36,7 @@
             </Canvas.RenderTransform>
             <!-- disco opaco: senza riempimento la finestra trasparente non riceverebbe il drag -->
             <Ellipse Width="300" Height="300" Fill="#E61E1E1E" />
-            <!-- mozzo: fermarsi qui sopra ~400 ms cambia anello (Converti → Strumenti → Azioni) -->
+            <!-- mozzo: fermarsi qui sopra ~800 ms cambia anello (Converti → Strumenti → Azioni) -->
             <Ellipse x:Name="Hub" Canvas.Left="122" Canvas.Top="122" Width="56" Height="56" Fill="#FFF57C00" />
             <TextBlock x:Name="HubLabel" Canvas.Left="116" Canvas.Top="142" Width="68" TextAlignment="Center"
                        Foreground="White" FontSize="10" FontWeight="SemiBold" IsHitTestVisible="False" />
