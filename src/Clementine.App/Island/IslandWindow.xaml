@@ -21,6 +21,13 @@
                     <RotateTransform Angle="-25" />
                 </Ellipse.RenderTransform>
             </Ellipse>
+            <!-- anello di avanzamento: StrokeDashArray impostato da SetProgress; parte dalle ore 12 -->
+            <Ellipse x:Name="ProgressRing" Margin="3" Stroke="White" StrokeThickness="3" Visibility="Collapsed"
+                     IsHitTestVisible="False" RenderTransformOrigin="0.5,0.5">
+                <Ellipse.RenderTransform>
+                    <RotateTransform Angle="-90" />
+                </Ellipse.RenderTransform>
+            </Ellipse>
         </Grid>
 
         <Canvas x:Name="WheelCanvas" Width="300" Height="300" Visibility="Collapsed" RenderTransformOrigin="0.5,0.5">

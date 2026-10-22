@@ -9,6 +9,7 @@ using System.Windows.Shapes;
 using System.Windows.Threading;
 using Clementine.App.Settings;
 using Clementine.App.Wheel;
+using Clementine.Core;
 
 namespace Clementine.App.Island;
 
@@ -16,24 +17,27 @@ public partial class IslandWindow : Window
 {
     const double IslandSize = 56, WheelSize = 300, TabWidth = 12, SnapDistance = 24;
     const double HubRadius = 34, OuterRadius = 145;
-    static readonly string[] FakeSlices = ["JPG", "PNG", "WebP", "HEIC", "PDF", "TIFF"]; // M1: spicchi finti
     static readonly Brush SliceBrush = Frozen(Color.FromRgb(0x3A, 0x3A, 0x3A));
     static readonly Brush HotBrush = Frozen(Color.FromRgb(0xF5, 0x7C, 0x00));
 
     readonly AppSettings _settings = AppSettings.Load();
     readonly DispatcherTimer _closeTimer = new() { Interval = TimeSpan.FromMilliseconds(80) };
     readonly List<Path> _slices = [];
+    readonly List<UIElement> _wheelItems = [];
+    IReadOnlyList<Operation> _ops = [];
     Rect _dockArea;
-    bool _wheelOpen;
+    bool _wheelOpen, _working;
     int _hot = -1;
 
-    /// <summary>Spicchio scelto e percorsi rilasciati.</summary>
-    public event Action<string, string[]>? Dropped;
+    /// <summary>Operazioni da mostrare sulla ruota per i file trascinati; vuota = la ruota non si apre.</summary>
+    public Func<string[], IReadOnlyList<Operation>> OperationsFor { get; init; } = _ => [];
+
+    /// <summary>Operazione scelta e percorsi rilasciati.</summary>
+    public event Action<Operation, string[]>? Dropped;
 
     public IslandWindow()
     {
         InitializeComponent();
-        BuildWheel();
         _closeTimer.Tick += (_, _) => CloseWheel();
         Loaded += (_, _) =>
         {
@@ -84,7 +88,7 @@ public partial class IslandWindow : Window
 
     void SetRetracted(bool retracted)
     {
-        if (_wheelOpen || _settings.Dock == DockSide.None) return;
+        if (_wheelOpen || _settings.Dock == DockSide.None || (retracted && _working)) return;
         Left = _settings.Dock == DockSide.Left
             ? _dockArea.Left - (retracted ? IslandSize - TabWidth : 0)
             : _dockArea.Right - (retracted ? TabWidth : IslandSize);
@@ -99,14 +103,33 @@ public partial class IslandWindow : Window
         return new Rect(wa.Left / dpi.DpiScaleX, wa.Top / dpi.DpiScaleY, wa.Width / dpi.DpiScaleX, wa.Height / dpi.DpiScaleY);
     }
 
+    /// <summary>Anello di avanzamento sull'isola (0..1); null lo nasconde. Mentre lavora l'isola resta fuori dal bordo.</summary>
+    public void SetProgress(double? value)
+    {
+        _working = value is not null;
+        ProgressRing.Visibility = _working ? Visibility.Visible : Visibility.Collapsed;
+        // tratto in unità di StrokeThickness: circonferenza della linea centrale / spessore (anello di 50 px, Margin 3)
+        var t = ProgressRing.StrokeThickness;
+        var circumference = Math.PI * (IslandSize - 2 * ProgressRing.Margin.Left - t) / t;
+        ProgressRing.StrokeDashArray = [Math.Max(value ?? 0, 0.001) * circumference, circumference];
+        SetRetracted(!_working && !IsMouseOver);
+    }
+
     // ---- ruota ----
 
-    void BuildWheel()
+    void BuildWheel(IReadOnlyList<Operation> ops)
     {
+        foreach (var item in _wheelItems) WheelCanvas.Children.Remove(item);
+        _wheelItems.Clear();
+        _slices.Clear();
+        _ops = ops;
+
         var c = new Point(WheelSize / 2, WheelSize / 2);
-        var step = 2 * Math.PI / FakeSlices.Length;
+        var step = 2 * Math.PI / ops.Count;
+        var mid = (HubRadius + OuterRadius) / 2;
+        var labelWidth = Math.Min(80, 2 * mid * Math.Sin(Math.Min(step, Math.PI) / 2) - 4);
         const double gap = 0.02;
-        for (var i = 0; i < FakeSlices.Length; i++)
+        for (var i = 0; i < ops.Count; i++)
         {
             var path = new Path
             {
@@ -114,18 +137,20 @@ public partial class IslandWindow : Window
                 Fill = SliceBrush,
             };
             _slices.Add(path);
-            WheelCanvas.Children.Add(path);
 
-            var mid = WheelLayout.PointAt(c, (HubRadius + OuterRadius) / 2, i * step);
+            var at = WheelLayout.PointAt(c, mid, i * step);
             var label = new TextBlock
             {
-                Text = FakeSlices[i], Width = 70, TextAlignment = TextAlignment.Center,
-                Foreground = Brushes.White, FontSize = 15, FontWeight = FontWeights.SemiBold, IsHitTestVisible = false,
+                Text = ops[i].Label, Width = labelWidth, TextAlignment = TextAlignment.Center,
+                Foreground = Brushes.White, FontSize = ops.Count > 8 ? 12 : 15, FontWeight = FontWeights.SemiBold,
+                IsHitTestVisible = false,
             };
-            Canvas.SetLeft(label, mid.X - 35);
-            Canvas.SetTop(label, mid.Y - 10);
-            WheelCanvas.Children.Add(label);
+            Canvas.SetLeft(label, at.X - labelWidth / 2);
+            Canvas.SetTop(label, at.Y - 10);
+            _wheelItems.Add(path);
+            _wheelItems.Add(label);
         }
+        foreach (var item in _wheelItems) WheelCanvas.Children.Insert(WheelCanvas.Children.Count - 1, item); // sotto il mozzo
     }
 
     void OpenWheel(DragEventArgs e)
@@ -173,7 +198,7 @@ public partial class IslandWindow : Window
     {
         var p = e.GetPosition(WheelCanvas);
         SetHot(_wheelOpen
-            ? WheelLayout.HitTest(p.X - WheelSize / 2, p.Y - WheelSize / 2, HubRadius, OuterRadius, FakeSlices.Length)
+            ? WheelLayout.HitTest(p.X - WheelSize / 2, p.Y - WheelSize / 2, HubRadius, OuterRadius, _ops.Count)
             : -1);
         e.Effects = _hot >= 0 ? DragDropEffects.Copy : DragDropEffects.None;
         e.Handled = true;
@@ -186,7 +211,11 @@ public partial class IslandWindow : Window
     protected override void OnDragEnter(DragEventArgs e)
     {
         _closeTimer.Stop();
-        if (!_wheelOpen && e.Data.GetDataPresent(DataFormats.FileDrop)) OpenWheel(e);
+        if (!_wheelOpen && e.Data.GetData(DataFormats.FileDrop) is string[] files && OperationsFor(files) is { Count: > 0 } ops)
+        {
+            BuildWheel(ops);
+            OpenWheel(e);
+        }
         UpdateHot(e);
     }
 
@@ -208,7 +237,7 @@ public partial class IslandWindow : Window
         var hot = _hot;
         CloseWheel();
         if (hot >= 0 && e.Data.GetData(DataFormats.FileDrop) is string[] files)
-            Dropped?.Invoke(FakeSlices[hot], files);
+            Dropped?.Invoke(_ops[hot], files);
         e.Handled = true;
     }
 

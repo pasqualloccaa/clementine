@@ -1,13 +1,23 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <!-- 10.0.17763: API WinRT per l'encoder HEIF di Windows -->
+    <TargetFramework>net8.0-windows10.0.17763.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="15.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Clementine.Core\Clementine.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- scaricati da tools\get-tools.ps1 -->
+    <None Include="..\..\tools\ffmpeg\*.exe" LinkBase="tools\ffmpeg" CopyToOutputDirectory="PreserveNewest" Visible="false" />
   </ItemGroup>
 
 </Project>

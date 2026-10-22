@@ -14,8 +14,6 @@ sealed class TrayIcon : IDisposable
         _icon.ContextMenuStrip.Items.Add("Esci", null, (_, _) => exit());
     }
 
-    public void Notify(string title, string text) => _icon.ShowBalloonTip(3000, title, text, ToolTipIcon.Info);
-
     public void Dispose() => _icon.Dispose();
 
     // shortcut: icona disegnata a runtime, sostituire con un .ico vero in M7

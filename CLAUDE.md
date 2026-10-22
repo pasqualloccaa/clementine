@@ -77,7 +77,7 @@ Clementine/
 │   ├── Clementine.Core/         # modello: FileKind, Operation, Pipeline, Registry
 │   ├── Clementine.Engines/      # adapter verso i motori esterni
 │   │   ├── FfmpegEngine.cs      # audio/video/gif
-│   │   ├── VipsEngine.cs        # immagini (NetVips) — fallback ImageMagick
+│   │   ├── MagickEngine.cs      # immagini (Magick.NET); HEIC in scrittura via encoder WinRT di Windows
 │   │   ├── PdfiumEngine.cs      # PDF → immagini/testo, merge/split (PDFium + PdfSharp)
 │   │   ├── LibreOfficeEngine.cs # docx/pptx/xlsx/pages/epub ↔ pdf (soffice --headless)
 │   │   ├── ArchiveEngine.cs     # zip/tar/gz (SharpCompress), rar solo in lettura
@@ -96,6 +96,12 @@ Clementine/
 - Esecuzione operazioni in background (`Channel<Job>`), UI mai bloccata; cancellazione con `CancellationToken`.
 - Impostazioni in `%APPDATA%\Clementine\settings.json`.
 - Avvio automatico opzionale (chiave `Run` del registro).
+
+### Note sui motori (verificate in M2)
+- libvips precompilato (NetVips.Native) non legge HEIC né BMP; ImageMagick (Magick.NET) legge tutto ma
+  nessuno dei due scrive HEIC (encoder HEVC escluso per brevetti). HEIC in uscita usa l'encoder di Windows
+  (estensioni Store "HEIF Image" + "HEVC Video"): se manca, lo spicchio HEIC non compare.
+- Smart App Control può bloccare DLL/exe nuovi non firmati (errore 0x800711C7) e rallenta il primo avvio.
 
 ### Mappa formati (parità con Tangerine 2.0.1)
 | Tipo | Ingresso | Uscita |
