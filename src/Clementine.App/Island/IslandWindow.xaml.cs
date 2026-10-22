@@ -20,7 +20,7 @@ public partial class IslandWindow : Window
     static readonly Brush SliceBrush = Frozen(Color.FromRgb(0x3A, 0x3A, 0x3A));
     static readonly Brush HotBrush = Frozen(Color.FromRgb(0xF5, 0x7C, 0x00));
 
-    readonly AppSettings _settings = AppSettings.Load();
+    readonly AppSettings _settings;
     readonly DispatcherTimer _closeTimer = new() { Interval = TimeSpan.FromMilliseconds(80) };
     readonly List<Path> _slices = [];
     readonly List<UIElement> _wheelItems = [];
@@ -35,8 +35,12 @@ public partial class IslandWindow : Window
     /// <summary>Operazione scelta e percorsi rilasciati.</summary>
     public event Action<Operation, string[]>? Dropped;
 
-    public IslandWindow()
+    /// <summary>Clic sinistro senza spostare l'isola.</summary>
+    public event Action? Clicked;
+
+    public IslandWindow(AppSettings settings)
     {
+        _settings = settings;
         InitializeComponent();
         _closeTimer.Tick += (_, _) => CloseWheel();
         Loaded += (_, _) =>
@@ -62,9 +66,12 @@ public partial class IslandWindow : Window
 
     void Island_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        var before = (Left, Top);
         _settings.Dock = DockSide.None; // niente ritrazione mentre si trascina
         DragMove();
+        var moved = before != (Left, Top);
         Snap();
+        if (!moved) Clicked?.Invoke();
     }
 
     void Snap()

@@ -1,0 +1,182 @@
+using System.Diagnostics;
+using System.IO.Compression;
+using System.Text;
+using Clementine.Core;
+using Clementine.Engines;
+using ImageMagick;
+using SharpCompress.Readers;
+using Xunit;
+
+namespace Clementine.Tests;
+
+public class PdfiumEngineTests
+{
+    static readonly IProgress<double> NoProgress = new Progress<double>();
+    static Operation Op(string ext) => new($"convert:{ext}", ext.ToUpperInvariant(), FileKind.Pdf, ext);
+
+    /// <summary>PDF minimo scritto a mano: una pagina Letter per testo, con xref corretto.</summary>
+    internal static void WritePdf(string path, params string[] pageTexts)
+    {
+        var objs = new List<string>
+        {
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            $"<< /Type /Pages /Kids [{string.Join(" ", pageTexts.Select((_, i) => $"{4 + 2 * i} 0 R"))}] /Count {pageTexts.Length} >>",
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        };
+        foreach (var text in pageTexts)
+        {
+            var content = $"BT /F1 24 Tf 72 700 Td ({text}) Tj ET";
+            objs.Add($"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents {objs.Count + 2} 0 R >>");
+            objs.Add($"<< /Length {content.Length} >>\nstream\n{content}\nendstream");
+        }
+        var pdf = new StringBuilder("%PDF-1.4\n");
+        var offsets = new List<int>();
+        for (var i = 0; i < objs.Count; i++)
+        {
+            offsets.Add(pdf.Length);
+            pdf.Append($"{i + 1} 0 obj\n{objs[i]}\nendobj\n");
+        }
+        var xref = pdf.Length;
+        pdf.Append($"xref\n0 {objs.Count + 1}\n0000000000 65535 f \n");
+        foreach (var o in offsets) pdf.Append($"{o:D10} 00000 n \n");
+        pdf.Append($"trailer\n<< /Size {objs.Count + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n");
+        File.WriteAllText(path, pdf.ToString(), Encoding.ASCII);
+    }
+
+    [Theory]
+    [InlineData("txt")]
+    [InlineData("md")]
+    public async Task ExtractsTextOfEveryPage(string ext)
+    {
+        using var dir = new TempDir();
+        var pdf = Path.Combine(dir.Path, "doc.pdf");
+        WritePdf(pdf, "Ciao Clementine", "Seconda pagina");
+        var output = Path.Combine(dir.Path, $"doc.{ext}");
+
+        await new PdfiumEngine().RunAsync(new Job(pdf, Op(ext), output), NoProgress, default);
+
+        var text = File.ReadAllText(output);
+        Assert.Contains("Ciao Clementine", text);
+        Assert.Contains("Seconda pagina", text);
+    }
+
+    [Fact]
+    public async Task OnePage_WritesOneImage_At300Dpi_OnWhite()
+    {
+        using var dir = new TempDir();
+        var pdf = Path.Combine(dir.Path, "doc.pdf");
+        WritePdf(pdf, "Una pagina");
+        var output = Path.Combine(dir.Path, "doc.jpg");
+
+        await new PdfiumEngine().RunAsync(new Job(pdf, Op("jpg"), output), NoProgress, default);
+
+        using var image = new MagickImage(output);
+        Assert.Equal((2550u, 3300u), (image.Width, image.Height)); // 8.5 x 11 pollici a 300 dpi
+        Assert.True(image.GetPixels().GetPixel(5, 5).ToColor()!.R > 250);
+    }
+
+    [Fact]
+    public async Task ManyPages_WritesFolder_OneImagePerPage()
+    {
+        using var dir = new TempDir();
+        var pdf = Path.Combine(dir.Path, "doc.pdf");
+        WritePdf(pdf, "Uno", "Due", "Tre");
+        var output = Path.Combine(dir.Path, "tmp.png");
+
+        await new PdfiumEngine().RunAsync(new Job(pdf, Op("png"), output), NoProgress, default);
+
+        Assert.Equal(["doc - 1.png", "doc - 2.png", "doc - 3.png"],
+            Directory.GetFiles(output).Select(Path.GetFileName).Order().ToArray());
+    }
+}
+
+public class ArchiveEngineTests
+{
+    static Operation Op(string ext) => new($"convert:{ext}", ext.ToUpperInvariant(), FileKind.Archive, ext);
+
+    [Theory]
+    [InlineData("tar")]
+    [InlineData("tar.gz")]
+    [InlineData("zip")]
+    public async Task Repacks_KeepingPathsAndContent(string target)
+    {
+        using var dir = new TempDir();
+        var zip = Path.Combine(dir.Path, "a.zip");
+        using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
+        {
+            using (var w = new StreamWriter(archive.CreateEntry("a.txt").Open())) w.Write("primo");
+            using (var w = new StreamWriter(archive.CreateEntry("sub/b.txt").Open())) w.Write("secondo");
+        }
+        var output = Path.Combine(dir.Path, $"out.{target}");
+        var reports = new List<double>();
+
+        await new ArchiveEngine().RunAsync(new Job(zip, Op(target), output), new SyncProgress(reports.Add), default);
+
+        var entries = new Dictionary<string, string>();
+        using (var reader = ReaderFactory.OpenReader(File.OpenRead(output), new ReaderOptions()))
+            while (reader.MoveToNextEntry())
+                if (!reader.Entry.IsDirectory)
+                    entries[reader.Entry.Key!] = new StreamReader(reader.OpenEntryStream()).ReadToEnd();
+        Assert.Equal("primo", entries["a.txt"]);
+        Assert.Equal("secondo", entries["sub/b.txt"]);
+        Assert.All(reports, p => Assert.InRange(p, 0, 1));
+    }
+}
+
+public class MetadataEngineTests
+{
+    internal static readonly string Exiftool = Path.Combine(AppContext.BaseDirectory, "tools", "exiftool", "exiftool.exe");
+
+    internal static string Exif(params string[] args)
+    {
+        var psi = new ProcessStartInfo(Exiftool) { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
+        foreach (var a in args) psi.ArgumentList.Add(a);
+        using var p = Process.Start(psi)!;
+        var output = p.StandardOutput.ReadToEnd();
+        p.WaitForExit();
+        return output.Trim();
+    }
+
+    internal static string JpgWithArtist(TempDir dir)
+    {
+        var jpg = Path.Combine(dir.Path, "foto.jpg");
+        new MagickImage(MagickColors.Orange, 64, 48).Write(jpg);
+        Exif("-Artist=Clementine Test", "-overwrite_original", jpg);
+        Assert.Equal("Clementine Test", Exif("-s3", "-Artist", jpg));
+        return jpg;
+    }
+
+    [Fact]
+    public async Task Strip_RemovesMetadata_AndLeavesOriginalAlone()
+    {
+        Assert.True(File.Exists(Exiftool), "eseguire tools\\get-tools.ps1");
+        using var dir = new TempDir();
+        var jpg = JpgWithArtist(dir);
+        var output = Path.Combine(dir.Path, "pulita.jpg");
+
+        await new MetadataEngine(Exiftool).RunAsync(new Job(jpg, Formats.StripMetadata, output), new Progress<double>(), default);
+
+        Assert.Equal("", Exif("-s3", "-Artist", output));
+        Assert.Equal("Clementine Test", Exif("-s3", "-Artist", jpg));
+    }
+
+    [Fact]
+    public async Task Heic_KeepsMetadata()
+    {
+        var engine = new MagickEngine(Exiftool);
+        var toHeic = new Operation("convert:heic", "HEIC", FileKind.Image, "heic");
+        if (!engine.CanHandle(toHeic)) return; // senza estensioni HEIF/HEVC
+        using var dir = new TempDir();
+        var jpg = JpgWithArtist(dir);
+        var heic = Path.Combine(dir.Path, "foto.heic");
+
+        await engine.RunAsync(new Job(jpg, toHeic, heic), new Progress<double>(), default);
+
+        Assert.Equal("Clementine Test", Exif("-s3", "-Artist", heic));
+    }
+}
+
+sealed class SyncProgress(Action<double> report) : IProgress<double>
+{
+    public void Report(double value) => report(value);
+}

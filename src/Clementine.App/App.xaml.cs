@@ -1,17 +1,21 @@
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using Clementine.App.Island;
 using Clementine.App.Notifications;
+using Clementine.App.Settings;
 using Clementine.App.Tray;
 using Clementine.Core;
 using Clementine.Engines;
 using Serilog;
+using Forms = System.Windows.Forms;
 
 namespace Clementine.App;
 
 public partial class App : Application
 {
+    readonly AppSettings _settings = AppSettings.Load();
     TrayIcon? _tray;
     Pipeline? _pipeline;
 
@@ -25,15 +29,20 @@ public partial class App : Application
             .CreateLogger();
         JobToasts.Init();
 
-        _pipeline = new Pipeline([new MagickEngine(), new FfmpegEngine(Path.Combine(AppContext.BaseDirectory, "tools", "ffmpeg"))]);
-        _tray = new TrayIcon(Shutdown);
-        var island = new IslandWindow { OperationsFor = files => Formats.ConversionsFor(files).Where(_pipeline.CanRun).ToList() };
+        var tools = Path.Combine(AppContext.BaseDirectory, "tools");
+        var exiftool = Path.Combine(tools, "exiftool", "exiftool.exe");
+        _pipeline = new Pipeline([
+            new MagickEngine(exiftool), new FfmpegEngine(Path.Combine(tools, "ffmpeg")),
+            new PdfiumEngine(), new ArchiveEngine(), new MetadataEngine(exiftool),
+        ]);
+        _tray = new TrayIcon(BuildMenu);
+        var island = new IslandWindow(_settings) { OperationsFor = OperationsFor };
 
+        island.Clicked += () => _tray.ShowMenu(Forms.Cursor.Position);
         island.Dropped += (op, files) =>
         {
             Console.WriteLine($"[Drop] {op.Label}: {string.Join(", ", files)}");
-            Log.Information("Drop {Op} su {Files}", op.Id, files);
-            _pipeline.Enqueue(files, op);
+            Enqueue(files, op);
         };
         _pipeline.Started += batch =>
         {
@@ -47,7 +56,13 @@ public partial class App : Application
         };
         _pipeline.Completed += result =>
         {
-            Dispatcher.BeginInvoke(() => island.SetProgress(null));
+            Dispatcher.BeginInvoke(() =>
+            {
+                island.SetProgress(null);
+                for (var i = result.Outputs.Count - 1; i >= 0; i--) // il più recente in cima
+                    _settings.AddRecent(new RecentItem(result.Sources[i], result.Batch.Op.Id, result.Outputs[i]));
+                _settings.Save();
+            });
             foreach (var output in result.Outputs) Log.Information("Creato {Output}", output);
             foreach (var error in result.Errors) Log.Error("Fallito {Op}: {Error}", result.Batch.Op.Id, error);
             Toast(() => JobToasts.Completed(result));
@@ -55,6 +70,65 @@ public partial class App : Application
 
         island.Show();
     }
+
+    IReadOnlyList<Operation> OperationsFor(IReadOnlyList<string> files) =>
+        Formats.ConversionsFor(files).Where(_pipeline!.CanRun).ToList();
+
+    void Enqueue(IReadOnlyList<string> files, Operation op)
+    {
+        Log.Information("{Op} su {Files}", op.Id, files);
+        _pipeline!.Enqueue(files, op);
+    }
+
+    // ---- menu (clic sinistro sull'isola e tray) ----
+
+    void BuildMenu(Forms.ToolStripItemCollection items)
+    {
+        foreach (var recent in _settings.Recent)
+        {
+            var op = Formats.ConversionsFor(recent.Input).FirstOrDefault(o => o.Id == recent.OpId);
+            var item = new Forms.ToolStripMenuItem(Path.GetFileName(recent.Output));
+            item.DropDownItems.Add(new Forms.ToolStripMenuItem($"Ripeti ({op?.Label ?? recent.OpId})", null,
+                (_, _) => Enqueue([recent.Input], op!)) { Enabled = op is not null && File.Exists(recent.Input) });
+            item.DropDownItems.Add(new Forms.ToolStripMenuItem("Apri cartella", null,
+                (_, _) => Process.Start("explorer.exe", $"/select,\"{recent.Output}\"")));
+            items.Add(item);
+        }
+        if (_settings.Recent.Count > 0) items.Add(new Forms.ToolStripSeparator());
+
+        // appunti letti solo qui, all'apertura del menu: mai durante un drag
+        if (ClipboardMenu() is { } clipboard) items.Add(clipboard);
+        items.Add(new Forms.ToolStripMenuItem("Esci", null, (_, _) => Shutdown()));
+    }
+
+    Forms.ToolStripMenuItem? ClipboardMenu()
+    {
+        var files = Forms.Clipboard.ContainsFileDropList() ? Forms.Clipboard.GetFileDropList().Cast<string>().ToArray() : null;
+        var isImage = files is null && Forms.Clipboard.ContainsImage();
+        var ops = files is not null ? OperationsFor(files) : isImage ? OperationsFor(["appunti.png"]) : [];
+        if (ops.Count == 0) return null;
+
+        var menu = new Forms.ToolStripMenuItem("Converti dagli appunti");
+        foreach (var op in ops)
+            menu.DropDownItems.Add(op.Label, null, (_, _) =>
+            {
+                if (files is not null) Enqueue(files, op);
+                else if (SaveClipboardImage() is { } png) Enqueue([png], op);
+            });
+        return menu;
+    }
+
+    // L'immagine negli appunti non ha un "originale" accanto a cui salvare: diventa un PNG in Download.
+    static string? SaveClipboardImage()
+    {
+        using var image = Forms.Clipboard.GetImage();
+        if (image is null) return null;
+        var path = OutputPath.Next(Path.Combine(DownloadsFolder(), $"Appunti {DateTime.Now:yyyy-MM-dd HH.mm.ss}.png"), "png");
+        image.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+        return path;
+    }
+
+    static string DownloadsFolder() => SHGetKnownFolderPath(new Guid("374DE290-123F-4565-9164-39C4925E467B"), 0, IntPtr.Zero);
 
     // gli eventi arrivano dal worker della coda: un toast fallito non deve fermarla
     static void Toast(Action show)
@@ -74,4 +148,7 @@ public partial class App : Application
 
     [DllImport("kernel32.dll")]
     static extern bool AttachConsole(int processId);
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, ExactSpelling = true, PreserveSig = false)]
+    static extern string SHGetKnownFolderPath([MarshalAs(UnmanagedType.LPStruct)] Guid id, uint flags, IntPtr token);
 }

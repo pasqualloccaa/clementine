@@ -8,7 +8,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Docnet.Core" Version="2.6.0" />
     <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="15.0.0" />
+    <PackageReference Include="SharpCompress" Version="0.50.7" />
   </ItemGroup>
 
   <ItemGroup>
@@ -18,6 +20,7 @@
   <ItemGroup>
     <!-- scaricati da tools\get-tools.ps1 -->
     <None Include="..\..\tools\ffmpeg\*.exe" LinkBase="tools\ffmpeg" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+    <None Include="..\..\tools\exiftool\**\*" LinkBase="tools\exiftool" CopyToOutputDirectory="PreserveNewest" Visible="false" />
   </ItemGroup>
 
 </Project>

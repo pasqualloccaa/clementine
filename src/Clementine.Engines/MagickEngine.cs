@@ -6,7 +6,8 @@ using Windows.Graphics.Imaging;
 namespace Clementine.Engines;
 
 /// <summary>Immagini con ImageMagick: legge tutti i formati in ingresso, HEIC compreso.</summary>
-public sealed class MagickEngine : IEngine
+/// <param name="exiftool">Se presente, copia i metadati nei file HEIC (l'encoder di Windows non li scrive).</param>
+public sealed class MagickEngine(string? exiftool = null) : IEngine
 {
     // ImageMagick (come libvips) non include un encoder HEVC: per scrivere HEIC si usa quello di Windows,
     // presente solo con le estensioni "HEIF Image" e "HEVC Video" dello Store.
@@ -36,12 +37,15 @@ public sealed class MagickEngine : IEngine
             image.Settings.SetDefine(MagickFormat.Jpeg, "optimize-coding", "false");
         }
 
-        if (target == "heic") await WriteHeicAsync(image, job.Output);
+        if (target == "heic")
+        {
+            await WriteHeicAsync(image, job.Output);
+            if (File.Exists(exiftool)) await MetadataEngine.CopyAsync(exiftool, job.Input, job.Output, ct);
+        }
         else image.Write(job.Output);
         progress.Report(1);
     }
 
-    // shortcut: i metadati EXIF non vengono copiati nel file HEIC; da aggiungere con ExifTool (M3)
     static async Task WriteHeicAsync(MagickImage image, string path)
     {
         var pixels = image.ToByteArray(MagickFormat.Bgra);

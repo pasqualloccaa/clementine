@@ -3,20 +3,26 @@ namespace Clementine.Core;
 /// <summary>Mappa formati (CLAUDE.md, parità con Tangerine) e conversioni proposte dalla ruota.</summary>
 public static class Formats
 {
+    // shortcut: PDF → docx/pptx/xlsx/epub richiede LibreOffice, arriva in M6
     static readonly Dictionary<FileKind, (string[] In, string[] Out)> Map = new()
     {
         [FileKind.Image] = (["jpg", "png", "webp", "heic", "tiff", "avif", "bmp", "svg", "gif"], ["jpg", "png", "webp", "heic", "tiff", "avif", "bmp"]),
         [FileKind.Audio] = (["mp3", "m4a", "wav", "flac", "ogg", "opus", "aiff", "wma"], ["mp3", "m4a", "wav", "flac", "ogg", "opus", "aiff", "wma"]),
         [FileKind.Video] = (["mp4", "mov", "mkv", "webm", "avi", "wmv", "gif"], ["mp4", "mov", "mkv", "webm", "avi", "wmv", "gif"]),
+        [FileKind.Pdf] = (["pdf"], ["txt", "md", "jpg", "png"]),
+        [FileKind.Archive] = (["zip", "tar", "tar.gz", "gz", "rar"], ["zip", "tar", "tar.gz"]),
     };
 
     static readonly Dictionary<string, string> Aliases = new()
     {
-        ["jpeg"] = "jpg", ["heif"] = "heic", ["tif"] = "tiff", ["aif"] = "aiff", ["m4v"] = "mp4",
+        ["jpeg"] = "jpg", ["heif"] = "heic", ["tif"] = "tiff", ["aif"] = "aiff", ["m4v"] = "mp4", ["tgz"] = "tar.gz",
     };
+
+    public static readonly Operation StripMetadata = new("metadata:strip", "Rimuovi metadati", null, null, "senza metadati");
 
     public static string Extension(string path)
     {
+        if (path.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase)) return "tar.gz";
         var ext = Path.GetExtension(path).TrimStart('.').ToLowerInvariant();
         return Aliases.GetValueOrDefault(ext, ext);
     }

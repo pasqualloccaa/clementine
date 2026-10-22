@@ -102,6 +102,9 @@ Clementine/
   nessuno dei due scrive HEIC (encoder HEVC escluso per brevetti). HEIC in uscita usa l'encoder di Windows
   (estensioni Store "HEIF Image" + "HEVC Video"): se manca, lo spicchio HEIC non compare.
 - Smart App Control può bloccare DLL/exe nuovi non firmati (errore 0x800711C7) e rallenta il primo avvio.
+- ExifTool (Perl) scrive nei HEIC dell'encoder di Windows solo con ordine degli hash fisso
+  (`PERL_HASH_SEED=0`, impostato in `ProcessRunner`): senza, fallisce a caso (~60%).
+- PDF: rendering e testo con PDFium (Docnet.Core); PDF a più pagine → cartella "nome (PNG)" con un'immagine per pagina.
 
 ### Mappa formati (parità con Tangerine 2.0.1)
 | Tipo | Ingresso | Uscita |

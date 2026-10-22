@@ -101,9 +101,4 @@ public class FfmpegEngineTests
             new FfmpegEngine(FfmpegDir).RunAsync(new Job(input, Op(FileKind.Video, "webm"), Path.Combine(dir.Path, "o.webm")), NoProgress, default));
         Assert.False(string.IsNullOrWhiteSpace(e.Message));
     }
-
-    sealed class SyncProgress(Action<double> report) : IProgress<double>
-    {
-        public void Report(double value) => report(value);
-    }
 }

@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Globalization;
 using Clementine.Core;
 
@@ -15,12 +14,12 @@ public sealed class FfmpegEngine(string ffmpegDir) : IEngine
     public async Task RunAsync(Job job, IProgress<double> progress, CancellationToken ct)
     {
         var duration = double.TryParse(
-            await RunAsync(_ffprobe, ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", job.Input], null, ct),
+            await ProcessRunner.RunAsync(_ffprobe, ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", job.Input], null, ct),
             CultureInfo.InvariantCulture, out var d) ? d : 0;
 
-        string[] args = ["-hide_banner", "-nostdin", "-n", "-i", job.Input, "-sn", .. CodecArgs(job.Op.TargetExtension),
+        string[] args = ["-hide_banner", "-nostdin", "-n", "-i", job.Input, "-sn", .. CodecArgs(job.Op.TargetExtension!),
             "-progress", "pipe:1", "-nostats", job.Output];
-        await RunAsync(_ffmpeg, args, line =>
+        await ProcessRunner.RunAsync(_ffmpeg, args, line =>
         {
             if (duration > 0 && line.StartsWith("out_time_us=") && long.TryParse(line[12..], out var us))
                 progress.Report(Math.Clamp(us / 1e6 / duration, 0, 1));
@@ -49,29 +48,4 @@ public sealed class FfmpegEngine(string ffmpegDir) : IEngine
 
     static readonly string[] H264 = ["-c:v", "libx264", "-crf", "23", "-preset", "medium", "-pix_fmt", "yuv420p",
         "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-c:a", "aac", "-b:a", "160k"];
-
-    /// <summary>Esegue il processo, passa ogni riga di stdout a onLine e restituisce stdout; eccezione con la coda di stderr se fallisce.</summary>
-    static async Task<string> RunAsync(string exe, string[] args, Action<string>? onLine, CancellationToken ct)
-    {
-        var psi = new ProcessStartInfo(exe)
-        {
-            UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-
-        using var process = Process.Start(psi)!;
-        using var kill = ct.Register(() => { try { process.Kill(entireProcessTree: true); } catch (InvalidOperationException) { } });
-        var stderr = process.StandardError.ReadToEndAsync(); // va svuotato in parallelo, o ffmpeg si blocca
-        var stdout = new System.Text.StringBuilder();
-        while (await process.StandardOutput.ReadLineAsync() is { } line)
-        {
-            stdout.AppendLine(line);
-            onLine?.Invoke(line);
-        }
-        await process.WaitForExitAsync(CancellationToken.None);
-        ct.ThrowIfCancellationRequested();
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException(string.Join(" ", (await stderr).Trim().Split('\n').TakeLast(2)).Trim());
-        return stdout.ToString().Trim();
-    }
 }

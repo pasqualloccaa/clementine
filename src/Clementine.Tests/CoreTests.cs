@@ -17,7 +17,18 @@ public sealed class TempDir : IDisposable
 
 public class FormatsTests
 {
-    static string[] Targets(params string[] files) => Formats.ConversionsFor(files).Select(o => o.TargetExtension).ToArray();
+    static string[] Targets(params string[] files) => Formats.ConversionsFor(files).Select(o => o.TargetExtension!).ToArray();
+
+    [Fact]
+    public void Pdf_OffersTextAndImages() => Assert.Equal(["txt", "md", "jpg", "png"], Targets("doc.PDF"));
+
+    [Theory]
+    [InlineData("a.tar.gz")]
+    [InlineData("a.tgz")]
+    public void TarGz_IsOneFormat(string file) => Assert.Equal(["zip", "tar"], Targets(file));
+
+    [Fact]
+    public void Rar_IsReadOnly() => Assert.Equal(["zip", "tar", "tar.gz"], Targets("a.rar"));
 
     [Fact]
     public void Heic_OffersImageFormats_NotItself()
@@ -62,6 +73,13 @@ public class OutputPathTests
         dir.File("foto (2).jpg");
         Assert.Equal(System.IO.Path.Combine(dir.Path, "foto (3).jpg"), OutputPath.Next(input, "jpg"));
     }
+
+    [Theory]
+    [InlineData("archivio.tar.gz", "zip", null, "archivio.zip")]
+    [InlineData("foto.jpg", "jpg", "senza metadati", "foto (senza metadati).jpg")]
+    [InlineData("doc.pdf", null, "PNG", "doc (PNG)")]
+    public void Names(string input, string? ext, string? suffix, string expected) =>
+        Assert.Equal(System.IO.Path.Combine(@"C:\x", expected), OutputPath.Next(System.IO.Path.Combine(@"C:\x", input), ext, suffix));
 }
 
 public class PipelineTests
@@ -74,13 +92,46 @@ public class PipelineTests
         public Task RunAsync(Job job, IProgress<double> progress, CancellationToken ct) => run(job);
     }
 
-    static async Task<BatchResult> RunAsync(IEngine engine, params string[] inputs)
+    static Task<BatchResult> RunAsync(IEngine engine, params string[] inputs) => RunAsync(engine, ToJpg, inputs);
+
+    static async Task<BatchResult> RunAsync(IEngine engine, Operation op, params string[] inputs)
     {
         using var pipeline = new Pipeline([engine]);
         var done = new TaskCompletionSource<BatchResult>();
         pipeline.Completed += done.SetResult;
-        pipeline.Enqueue(inputs, ToJpg);
+        pipeline.Enqueue(inputs, op);
         return await done.Task.WaitAsync(TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
+    public async Task FolderOutput_IsMovedToLabelledFolder()
+    {
+        using var dir = new TempDir();
+        var input = dir.File("doc.pdf");
+        var toPng = new Operation("convert:png", "PNG", FileKind.Pdf, "png");
+
+        var result = await RunAsync(new FakeEngine(j =>
+        {
+            Directory.CreateDirectory(j.Output);
+            return File.WriteAllTextAsync(System.IO.Path.Combine(j.Output, "doc - 1.png"), "p1");
+        }), toPng, input);
+
+        Assert.Equal(System.IO.Path.Combine(dir.Path, "doc (PNG)"), Assert.Single(result.Outputs));
+        Assert.True(File.Exists(System.IO.Path.Combine(dir.Path, "doc (PNG)", "doc - 1.png")));
+        Assert.Single(Directory.GetDirectories(dir.Path)); // nessuna cartella temporanea rimasta
+    }
+
+    [Fact]
+    public async Task SameExtensionOperation_UsesSuffix()
+    {
+        using var dir = new TempDir();
+        var input = dir.File("foto.JPG", "originale");
+
+        var result = await RunAsync(new FakeEngine(j => File.WriteAllTextAsync(j.Output, "pulito")), Formats.StripMetadata, input);
+
+        Assert.Equal(System.IO.Path.Combine(dir.Path, "foto (senza metadati).JPG"), Assert.Single(result.Outputs));
+        Assert.Equal(input, Assert.Single(result.Sources));
+        Assert.Equal("originale", File.ReadAllText(input));
     }
 
     [Fact]
@@ -115,6 +166,7 @@ public class PipelineTests
 
         Assert.Contains("boom", Assert.Single(result.Errors));
         Assert.Equal(System.IO.Path.Combine(dir.Path, "buono.jpg"), Assert.Single(result.Outputs));
+        Assert.Equal(good, Assert.Single(result.Sources)); // allineato alle uscite, non agli ingressi
         Assert.Equal(3, Directory.GetFiles(dir.Path).Length);
     }
 }
