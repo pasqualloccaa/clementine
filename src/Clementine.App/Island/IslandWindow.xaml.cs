@@ -24,13 +24,18 @@ public partial class IslandWindow : Window
     readonly DispatcherTimer _closeTimer = new() { Interval = TimeSpan.FromMilliseconds(80) };
     readonly List<Path> _slices = [];
     readonly List<UIElement> _wheelItems = [];
+    static readonly string[] RingNames = ["Converti", "Strumenti", "Azioni"];
+    static readonly TimeSpan HubDwell = TimeSpan.FromMilliseconds(400);
+    IReadOnlyList<Operation>[] _rings = [];
     IReadOnlyList<Operation> _ops = [];
+    Ring _ring, _manualRing;
+    DateTime? _hubSince;
     Rect _dockArea;
     bool _wheelOpen, _working;
     int _hot = -1;
 
-    /// <summary>Operazioni da mostrare sulla ruota per i file trascinati; vuota = la ruota non si apre.</summary>
-    public Func<string[], IReadOnlyList<Operation>> OperationsFor { get; init; } = _ => [];
+    /// <summary>Le operazioni dei tre anelli (indice = Ring) per i file trascinati; tutti vuoti = la ruota non si apre.</summary>
+    public Func<string[], IReadOnlyList<Operation>[]> OperationsFor { get; init; } = _ => [[], [], []];
 
     /// <summary>Operazione scelta e percorsi rilasciati.</summary>
     public event Action<Operation, string[]>? Dropped;
@@ -124,11 +129,36 @@ public partial class IslandWindow : Window
 
     // ---- ruota ----
 
+    void ShowRing(Ring ring)
+    {
+        _ring = ring;
+        HubLabel.Text = RingNames[(int)ring];
+        BuildWheel(_rings[(int)ring]);
+    }
+
+    // anello scelto: Ctrl → Strumenti, Alt → Azioni, altrimenti quello scelto con il mozzo
+    Ring RingFor(DragEventArgs e) =>
+        e.KeyStates.HasFlag(DragDropKeyStates.ControlKey) ? Ring.Tools
+        : e.KeyStates.HasFlag(DragDropKeyStates.AltKey) ? Ring.Actions
+        : _manualRing;
+
+    // il prossimo anello non vuoto dopo "from"
+    Ring NextRing(Ring from)
+    {
+        for (var i = 1; i <= _rings.Length; i++)
+        {
+            var next = (Ring)(((int)from + i) % _rings.Length);
+            if (_rings[(int)next].Count > 0) return next;
+        }
+        return from;
+    }
+
     void BuildWheel(IReadOnlyList<Operation> ops)
     {
         foreach (var item in _wheelItems) WheelCanvas.Children.Remove(item);
         _wheelItems.Clear();
         _slices.Clear();
+        _hot = -1;
         _ops = ops;
 
         var c = new Point(WheelSize / 2, WheelSize / 2);
@@ -146,18 +176,27 @@ public partial class IslandWindow : Window
             _slices.Add(path);
 
             var at = WheelLayout.PointAt(c, mid, i * step);
-            var label = new TextBlock
+            // etichette lunghe ("Estrai audio") vanno a capo: il blocco di due righe resta centrato sullo spicchio
+            var label = new Grid
             {
-                Text = ops[i].Label, Width = labelWidth, TextAlignment = TextAlignment.Center,
-                Foreground = Brushes.White, FontSize = ops.Count > 8 ? 12 : 15, FontWeight = FontWeights.SemiBold,
-                IsHitTestVisible = false,
+                Width = labelWidth, Height = 40, IsHitTestVisible = false,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = ops[i].Label, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap,
+                        VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.White,
+                        FontSize = ops.Count > 8 || ops[i].Label.Length > 6 ? 12 : 15, FontWeight = FontWeights.SemiBold,
+                    },
+                },
             };
             Canvas.SetLeft(label, at.X - labelWidth / 2);
-            Canvas.SetTop(label, at.Y - 10);
+            Canvas.SetTop(label, at.Y - 20);
             _wheelItems.Add(path);
             _wheelItems.Add(label);
         }
-        foreach (var item in _wheelItems) WheelCanvas.Children.Insert(WheelCanvas.Children.Count - 1, item); // sotto il mozzo
+        var hub = WheelCanvas.Children.IndexOf(Hub);
+        foreach (var item in _wheelItems) WheelCanvas.Children.Insert(hub++, item); // sotto il mozzo
     }
 
     void OpenWheel(DragEventArgs e)
@@ -204,9 +243,21 @@ public partial class IslandWindow : Window
     void UpdateHot(DragEventArgs e)
     {
         var p = e.GetPosition(WheelCanvas);
-        SetHot(_wheelOpen
-            ? WheelLayout.HitTest(p.X - WheelSize / 2, p.Y - WheelSize / 2, HubRadius, OuterRadius, _ops.Count)
-            : -1);
+        var (dx, dy) = (p.X - WheelSize / 2, p.Y - WheelSize / 2);
+        if (_wheelOpen)
+        {
+            var ring = RingFor(e);
+            var onHub = dx * dx + dy * dy < HubRadius * HubRadius && ring == _manualRing;
+            if (!onHub) _hubSince = null;
+            else if (_hubSince is null) _hubSince = DateTime.UtcNow;
+            else if (DateTime.UtcNow - _hubSince >= HubDwell) // restando fermi gira ancora ogni 400 ms
+            {
+                ring = _manualRing = NextRing(_manualRing);
+                _hubSince = DateTime.UtcNow;
+            }
+            if (ring != _ring) ShowRing(ring);
+        }
+        SetHot(_wheelOpen ? WheelLayout.HitTest(dx, dy, HubRadius, OuterRadius, _ops.Count) : -1);
         e.Effects = _hot >= 0 ? DragDropEffects.Copy : DragDropEffects.None;
         e.Handled = true;
     }
@@ -218,9 +269,13 @@ public partial class IslandWindow : Window
     protected override void OnDragEnter(DragEventArgs e)
     {
         _closeTimer.Stop();
-        if (!_wheelOpen && e.Data.GetData(DataFormats.FileDrop) is string[] files && OperationsFor(files) is { Count: > 0 } ops)
+        if (!_wheelOpen && e.Data.GetData(DataFormats.FileDrop) is string[] files
+            && OperationsFor(files) is var rings && rings.Any(r => r.Count > 0))
         {
-            BuildWheel(ops);
+            _rings = rings;
+            _manualRing = rings[(int)Ring.Convert].Count > 0 ? Ring.Convert : NextRing(Ring.Convert);
+            _hubSince = null;
+            ShowRing(RingFor(e));
             OpenWheel(e);
         }
         UpdateHot(e);

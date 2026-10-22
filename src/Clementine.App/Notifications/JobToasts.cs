@@ -6,13 +6,14 @@ using Microsoft.Toolkit.Uwp.Notifications;
 
 namespace Clementine.App.Notifications;
 
-/// <summary>Un toast per batch (tag = id del batch): progresso mentre lavora, poi esito con "Mostra in cartella".</summary>
+/// <summary>Un toast per batch (tag = id del batch): progresso con "Annulla" mentre lavora, poi esito con "Mostra in cartella".</summary>
 static class JobToasts
 {
-    public static void Init() => ToastNotificationManagerCompat.OnActivated += e =>
+    public static void Init(Action<int> cancel) => ToastNotificationManagerCompat.OnActivated += e =>
     {
-        if (ToastArguments.Parse(e.Argument).TryGetValue("select", out var path))
-            Process.Start("explorer.exe", $"/select,\"{path}\"");
+        var args = ToastArguments.Parse(e.Argument);
+        if (args.TryGetValue("select", out var path)) Process.Start("explorer.exe", $"/select,\"{path}\"");
+        if (args.TryGetValue("cancel", out var id) && int.TryParse(id, CultureInfo.InvariantCulture, out var batchId)) cancel(batchId);
     };
 
     // Un toast cliccato ad app chiusa la rilancerebbe con un'isola nuova: meglio non lasciarne in giro.
@@ -20,12 +21,13 @@ static class JobToasts
 
     public static void Started(Batch batch) =>
         new ToastContentBuilder()
-            .AddText($"Conversione in {batch.Op.Label}")
+            .AddText(Title(batch.Op))
             .AddVisualChild(new AdaptiveProgressBar
             {
                 Value = new BindableProgressBarValue("value"),
                 Status = new BindableString("status"),
             })
+            .AddButton(new ToastButton().SetContent("Annulla").AddArgument("cancel", Tag(batch)))
             .Show(t =>
             {
                 t.Tag = Tag(batch);
@@ -38,26 +40,40 @@ static class JobToasts
     public static void Completed(BatchResult result)
     {
         var builder = new ToastContentBuilder();
-        if (result.Errors.Count == 0)
-            builder.AddText($"Convertit{(result.Outputs.Count == 1 ? "o" : "i")} in {result.Batch.Op.Label}")
+        if (result.Cancelled)
+            builder.AddText($"{Title(result.Batch.Op)}: annullato")
+                .AddText(result.Outputs.Count > 0 ? $"Già completati: {string.Join(", ", result.Outputs.Select(Path.GetFileName))}" : "Nessun file creato");
+        else if (result.Errors.Count == 0)
+            builder.AddText($"{Title(result.Batch.Op)}: fatto")
                 .AddText(string.Join("\n", result.Outputs.Select(Path.GetFileName)));
         else
-            builder.AddText($"{result.Errors.Count} di {result.Batch.Inputs.Count} non convertit{(result.Errors.Count == 1 ? "o" : "i")}")
+            builder.AddText($"{result.Errors.Count} di {result.Batch.Inputs.Count} non riuscit{(result.Errors.Count == 1 ? "o" : "i")}")
                 .AddText(string.Join("\n", result.Errors));
 
-        if (result.Outputs.Count > 0)
-            builder.AddArgument("select", result.Outputs[0])
-                .AddButton(new ToastButton().SetContent("Mostra in cartella").AddArgument("select", result.Outputs[0]));
-
+        if (result.Outputs.Count > 0) AddShowInFolder(builder, result.Outputs[0]);
         builder.Show(t => t.Tag = Tag(result.Batch));
     }
+
+    /// <summary>Esito di un'azione dell'anello Alt.</summary>
+    public static void Info(string title, string text, string? select = null)
+    {
+        var builder = new ToastContentBuilder().AddText(title).AddText(text);
+        if (select is not null) AddShowInFolder(builder, select);
+        builder.Show();
+    }
+
+    static void AddShowInFolder(ToastContentBuilder builder, string path) =>
+        builder.AddArgument("select", path)
+            .AddButton(new ToastButton().SetContent("Mostra in cartella").AddArgument("select", path));
+
+    static string Title(Operation op) => op.Id.StartsWith("convert:") ? $"Conversione in {op.Label}" : op.Label;
 
     static string Tag(Batch batch) => batch.Id.ToString(CultureInfo.InvariantCulture);
 
     static Windows.UI.Notifications.NotificationData Data(Batch batch, double value) => new(new Dictionary<string, string>
     {
         ["value"] = value.ToString(CultureInfo.InvariantCulture),
-        ["status"] = batch.Inputs.Count == 1
+        ["status"] = batch.Inputs.Count == 1 || batch.Op.Combines
             ? Path.GetFileName(batch.Inputs[0])
             : $"{Math.Min((int)(value * batch.Inputs.Count) + 1, batch.Inputs.Count)} di {batch.Inputs.Count}",
     });

@@ -17,8 +17,24 @@ public sealed class FfmpegEngine(string ffmpegDir) : IEngine
             await ProcessRunner.RunAsync(_ffprobe, ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", job.Input], null, ct),
             CultureInfo.InvariantCulture, out var d) ? d : 0;
 
-        string[] args = ["-hide_banner", "-nostdin", "-n", "-i", job.Input, "-sn", .. CodecArgs(job.Op.TargetExtension!),
-            "-progress", "pipe:1", "-nostats", job.Output];
+        var output = job.Output;
+        var ext = Formats.Extension(output);
+        string[] codec = job.Op.Id switch
+        {
+            "tool:compress-video" => Compress,
+            // loudnorm lavora a 192 kHz: si torna a 48 kHz, che vale per tutti i formati di uscita
+            "tool:normalize" => ["-af", "loudnorm=I=-16:TP=-1.5:LRA=11", "-ar", "48000", .. CodecArgs(ext)],
+            "tool:mono" => ["-ac", "1", .. CodecArgs(ext)],
+            "tool:frames" => ["-an", "-vf", "fps=1", "-q:v", "3"],
+            _ => CodecArgs(ext), // conversioni ed "Estrai audio"
+        };
+        if (job.Op.Id == "tool:frames")
+        {
+            // un JPG al secondo, in una cartella
+            output = Path.Combine(Directory.CreateDirectory(job.Output).FullName, $"{Path.GetFileNameWithoutExtension(job.Input)} - %04d.jpg");
+        }
+
+        string[] args = ["-hide_banner", "-nostdin", "-n", "-i", job.Input, "-sn", .. codec, "-progress", "pipe:1", "-nostats", output];
         await ProcessRunner.RunAsync(_ffmpeg, args, line =>
         {
             if (duration > 0 && line.StartsWith("out_time_us=") && long.TryParse(line[12..], out var us))
@@ -46,6 +62,10 @@ public sealed class FfmpegEngine(string ffmpegDir) : IEngine
         _ => throw new NotSupportedException($"Formato di uscita non gestito: {ext}"),
     };
 
-    static readonly string[] H264 = ["-c:v", "libx264", "-crf", "23", "-preset", "medium", "-pix_fmt", "yuv420p",
+    // H.264 più compresso, al massimo 1080p di larghezza 1920
+    static readonly string[] Compress = ["-c:v", "libx264", "-crf", "28", "-preset", "medium", "-pix_fmt", "yuv420p",
+        "-vf", @"scale=trunc(min(1920\,iw)/2)*2:-2", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart"];
+
+    static readonly string[] H264 =["-c:v", "libx264", "-crf", "23", "-preset", "medium", "-pix_fmt", "yuv420p",
         "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-c:a", "aac", "-b:a", "160k"];
 }

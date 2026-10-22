@@ -6,12 +6,40 @@ using SharpCompress.Writers.Tar;
 
 namespace Clementine.Engines;
 
-/// <summary>Riconfeziona un archivio (zip, tar, tar.gz, gz, rar) in zip, tar o tar.gz, senza estrarre su disco.</summary>
+/// <summary>
+/// Riconfeziona un archivio (zip, tar, tar.gz, gz, rar) in zip, tar o tar.gz, senza estrarre su disco;
+/// "ZIP" mette file e cartelle in un nuovo archivio.
+/// </summary>
 public sealed class ArchiveEngine : IEngine
 {
-    public bool CanHandle(Operation op) => op.Kind == FileKind.Archive;
+    public bool CanHandle(Operation op) => op.Kind == FileKind.Archive || op.Id == Toolbox.Zip.Id;
 
     public Task RunAsync(Job job, IProgress<double> progress, CancellationToken ct)
+    {
+        if (job.Op.Id == Toolbox.Zip.Id) Zip(job, progress, ct);
+        else Repack(job, progress, ct);
+        return Task.CompletedTask;
+    }
+
+    static void Zip(Job job, IProgress<double> progress, CancellationToken ct)
+    {
+        // ogni file con il percorso dentro l'archivio: le cartelle mantengono la loro struttura
+        var entries = job.AllInputs.SelectMany(path => Directory.Exists(path)
+            ? Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories)
+                .Select(f => (File: f, Key: Path.Combine(Path.GetFileName(path.TrimEnd('\\', '/')), Path.GetRelativePath(path, f))))
+            : [(File: path, Key: Path.GetFileName(path))]).ToList();
+
+        using var output = File.Create(job.Output);
+        using var writer = WriterFactory.OpenWriter(output, ArchiveType.Zip, new WriterOptions(CompressionType.Deflate));
+        for (var i = 0; i < entries.Count; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            writer.Write(entries[i].Key.Replace('\\', '/'), entries[i].File);
+            progress.Report((i + 1.0) / entries.Count);
+        }
+    }
+
+    static void Repack(Job job, IProgress<double> progress, CancellationToken ct)
     {
         var (type, compression) = job.Op.TargetExtension switch
         {
@@ -48,6 +76,5 @@ public sealed class ArchiveEngine : IEngine
             else writer.Write(key, data, entry.LastModifiedTime);
             progress.Report((double)input.Position / input.Length);
         }
-        return Task.CompletedTask;
     }
 }

@@ -5,6 +5,8 @@ using System.Windows;
 using Clementine.App.Island;
 using Clementine.App.Notifications;
 using Clementine.App.Settings;
+using Clementine.App.Shell;
+using System.Windows.Interop;
 using Clementine.App.Tray;
 using Clementine.Core;
 using Clementine.Engines;
@@ -27,7 +29,7 @@ public partial class App : Application
             .WriteTo.File(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Clementine", "logs", "clementine-.log"),
                 rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14)
             .CreateLogger();
-        JobToasts.Init();
+        JobToasts.Init(id => _pipeline?.Cancel(id));
 
         var tools = Path.Combine(AppContext.BaseDirectory, "tools");
         var exiftool = Path.Combine(tools, "exiftool", "exiftool.exe");
@@ -36,13 +38,15 @@ public partial class App : Application
             new PdfiumEngine(), new ArchiveEngine(), new MetadataEngine(exiftool),
         ]);
         _tray = new TrayIcon(BuildMenu);
-        var island = new IslandWindow(_settings) { OperationsFor = OperationsFor };
+        var island = new IslandWindow(_settings) { OperationsFor = RingsFor };
 
         island.Clicked += () => _tray.ShowMenu(Forms.Cursor.Position);
         island.Dropped += (op, files) =>
         {
             Console.WriteLine($"[Drop] {op.Label}: {string.Join(", ", files)}");
-            Enqueue(files, op);
+            if (Toolbox.IsAction(op))
+                Dispatcher.BeginInvoke(() => FileActions.RunAsync(op, files, new WindowInteropHelper(island).Handle));
+            else Enqueue(files, op);
         };
         _pipeline.Started += batch =>
         {
@@ -74,6 +78,10 @@ public partial class App : Application
     IReadOnlyList<Operation> OperationsFor(IReadOnlyList<string> files) =>
         Formats.ConversionsFor(files).Where(_pipeline!.CanRun).ToList();
 
+    // anelli Converti e Strumenti solo con le operazioni che un motore sa fare (es. niente HEIC senza encoder)
+    IReadOnlyList<Operation>[] RingsFor(IReadOnlyList<string> files) =>
+        Toolbox.RingsFor(files).Select(ops => (IReadOnlyList<Operation>)ops.Where(op => Toolbox.IsAction(op) || _pipeline!.CanRun(op)).ToList()).ToArray();
+
     void Enqueue(IReadOnlyList<string> files, Operation op)
     {
         Log.Information("{Op} su {Files}", op.Id, files);
@@ -84,9 +92,20 @@ public partial class App : Application
 
     void BuildMenu(Forms.ToolStripItemCollection items)
     {
+        var queue = _pipeline!.Queue;
+        for (var i = 0; i < queue.Count; i++)
+        {
+            var batch = queue[i];
+            var files = batch.Inputs.Count == 1 ? Path.GetFileName(batch.Inputs[0]) : $"{batch.Inputs.Count} file";
+            var item = new Forms.ToolStripMenuItem($"{(i == 0 ? "▶" : "⏸")} {batch.Op.Label} – {files}");
+            item.DropDownItems.Add("Annulla", null, (_, _) => _pipeline.Cancel(batch.Id));
+            items.Add(item);
+        }
+        if (queue.Count > 0) items.Add(new Forms.ToolStripSeparator());
+
         foreach (var recent in _settings.Recent)
         {
-            var op = Formats.ConversionsFor(recent.Input).FirstOrDefault(o => o.Id == recent.OpId);
+            var op = Toolbox.Find(recent.Input, recent.OpId);
             var item = new Forms.ToolStripMenuItem(Path.GetFileName(recent.Output));
             item.DropDownItems.Add(new Forms.ToolStripMenuItem($"Ripeti ({op?.Label ?? recent.OpId})", null,
                 (_, _) => Enqueue([recent.Input], op!)) { Enabled = op is not null && File.Exists(recent.Input) });

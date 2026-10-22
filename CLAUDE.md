@@ -78,7 +78,7 @@ Clementine/
 │   ├── Clementine.Engines/      # adapter verso i motori esterni
 │   │   ├── FfmpegEngine.cs      # audio/video/gif
 │   │   ├── MagickEngine.cs      # immagini (Magick.NET); HEIC in scrittura via encoder WinRT di Windows
-│   │   ├── PdfiumEngine.cs      # PDF → immagini/testo, merge/split (PDFium + PdfSharp)
+│   │   ├── PdfiumEngine.cs      # PDF → immagini/testo (PDFium), merge/split (PdfPig)
 │   │   ├── LibreOfficeEngine.cs # docx/pptx/xlsx/pages/epub ↔ pdf (soffice --headless)
 │   │   ├── ArchiveEngine.cs     # zip/tar/gz (SharpCompress), rar solo in lettura
 │   │   └── MetadataEngine.cs    # ExifTool
@@ -105,6 +105,9 @@ Clementine/
 - ExifTool (Perl) scrive nei HEIC dell'encoder di Windows solo con ordine degli hash fisso
   (`PERL_HASH_SEED=0`, impostato in `ProcessRunner`): senza, fallisce a caso (~60%).
 - PDF: rendering e testo con PDFium (Docnet.Core); PDF a più pagine → cartella "nome (PNG)" con un'immagine per pagina.
+- Niente PDFsharp: dalla 6.5 è AGPL e chiede una chiave di licenza. Unisci/dividi con PdfPig (Apache 2.0).
+- Strumenti senza parametri (M4); quelli che chiedono un editor o valori (ritaglia, annota, trim, velocità…)
+  sono rimandati: vedi il commento `shortcut:` in `Toolbox.cs`.
 
 ### Mappa formati (parità con Tangerine 2.0.1)
 | Tipo | Ingresso | Uscita |

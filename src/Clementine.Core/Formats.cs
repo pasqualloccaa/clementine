@@ -27,6 +27,12 @@ public static class Formats
         return Aliases.GetValueOrDefault(ext, ext);
     }
 
+    public static IEnumerable<FileKind> KindsOf(string path)
+    {
+        var ext = Extension(path);
+        return Map.Where(m => m.Value.In.Contains(ext)).Select(m => m.Key);
+    }
+
     /// <summary>Conversioni per un file: tutte le uscite delle famiglie che lo leggono, tranne il suo stesso formato.</summary>
     public static IEnumerable<Operation> ConversionsFor(string path)
     {
