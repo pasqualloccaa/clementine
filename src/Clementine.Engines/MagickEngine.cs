@@ -29,6 +29,12 @@ public sealed class MagickEngine : IEngine
             image.Alpha(AlphaAction.Remove);
         }
         if (target is "jpg" or "webp" or "avif") image.Quality = 90;
+        if (target == "jpg")
+        {
+            // con qualità >= 90 ImageMagick passerebbe a 4:4:4 + Huffman ottimizzato: scrittura 2-3x più lenta
+            image.Settings.SetDefine(MagickFormat.Jpeg, "sampling-factor", "4:2:0");
+            image.Settings.SetDefine(MagickFormat.Jpeg, "optimize-coding", "false");
+        }
 
         if (target == "heic") await WriteHeicAsync(image, job.Output);
         else image.Write(job.Output);

@@ -7,9 +7,8 @@ using Xunit.Abstractions;
 
 namespace Clementine.Tests;
 
-public class EngineTests(ITestOutputHelper output)
+public class MagickEngineTests
 {
-    static readonly string FfmpegDir = Path.Combine(AppContext.BaseDirectory, "tools", "ffmpeg");
     static readonly IProgress<double> NoProgress = new Progress<double>();
 
     static Operation Op(FileKind kind, string ext) => new($"convert:{ext}", ext.ToUpperInvariant(), kind, ext);
@@ -28,8 +27,16 @@ public class EngineTests(ITestOutputHelper output)
         Assert.Equal(MagickFormat.Jpeg, result.Format);
         Assert.True(result.GetPixels().GetPixel(10, 10).ToColor()!.R > 250);
     }
+}
+
+[CollectionDefinition(nameof(PerfTests), DisableParallelization = true)]
+[Collection(nameof(PerfTests))] // misura la conversione, non la contesa di CPU con gli altri test
+public class PerfTests(ITestOutputHelper output)
+{
+    static Operation Op(FileKind kind, string ext) => new($"convert:{ext}", ext.ToUpperInvariant(), kind, ext);
 
     // Criterio di parità: HEIC → JPG di una foto da iPhone (12 MP) in meno di 1 s.
+    // Il campione è rumore non a tasselli: caso peggiore rispetto a una foto vera (libheif decodifica i tasselli in parallelo).
     [Fact]
     public async Task Magick_Heic12MP_ToJpg_UnderOneSecond()
     {
@@ -40,10 +47,10 @@ public class EngineTests(ITestOutputHelper output)
         var png = Path.Combine(dir.Path, "foto.png");
         using (var noise = new MagickImage("plasma:", 4032, 3024)) noise.Write(png);
         var heic = Path.Combine(dir.Path, "foto.heic");
-        await engine.RunAsync(new Job(png, Op(FileKind.Image, "heic"), heic), NoProgress, default);
+        await engine.RunAsync(new Job(png, Op(FileKind.Image, "heic"), heic), new Progress<double>(), default);
 
         var sw = Stopwatch.StartNew();
-        await engine.RunAsync(new Job(heic, Op(FileKind.Image, "jpg"), Path.Combine(dir.Path, "foto.jpg")), NoProgress, default);
+        await engine.RunAsync(new Job(heic, Op(FileKind.Image, "jpg"), Path.Combine(dir.Path, "foto.jpg")), new Progress<double>(), default);
         sw.Stop();
         output.WriteLine($"HEIC→JPG 12 MP: {sw.ElapsedMilliseconds} ms");
 
@@ -51,6 +58,14 @@ public class EngineTests(ITestOutputHelper output)
         Assert.Equal((4032u, 3024u), (result.Width, result.Height));
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(1), $"{sw.ElapsedMilliseconds} ms");
     }
+}
+
+public class FfmpegEngineTests
+{
+    static readonly string FfmpegDir = Path.Combine(AppContext.BaseDirectory, "tools", "ffmpeg");
+    static readonly IProgress<double> NoProgress = new Progress<double>();
+
+    static Operation Op(FileKind kind, string ext) => new($"convert:{ext}", ext.ToUpperInvariant(), kind, ext);
 
     [Theory]
     [InlineData("mp3", FileKind.Audio)]
