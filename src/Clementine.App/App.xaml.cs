@@ -43,7 +43,8 @@ public partial class App : Application
         island.Dropped += (op, files) =>
         {
             Console.WriteLine($"[Drop] {op.Label}: {string.Join(", ", files)}");
-            if (Toolbox.IsAction(op))
+            if (op.Id == "action:share") FileActions.Share(files); // dentro il Drop: unica occasione di primo piano
+            else if (Toolbox.IsAction(op))
                 Dispatcher.BeginInvoke(() => FileActions.RunAsync(op, files));
             else Enqueue(files, op);
         };

@@ -48,14 +48,6 @@ static class FileActions
                     }
                     break;
 
-                case "action:share":
-                    // Windows apre Condividi solo per l'app in primo piano, e dopo un drop lo è Esplora file:
-                    // si passa da una notifica, il cui clic porta Clementine in primo piano (→ ShareFromToastAsync)
-                    var id = Guid.NewGuid().ToString("N");
-                    PendingShares[id] = paths;
-                    JobToasts.ShareReady(id, paths.Length == 1 ? Path.GetFileName(paths[0]) : $"{paths.Length} file");
-                    break;
-
                 case "action:new-folder":
                     var folder = OutputPath.Free(Path.Combine(Path.GetDirectoryName(paths[0])!, "Nuova cartella"), isFolder: true);
                     Directory.CreateDirectory(folder);
@@ -71,26 +63,33 @@ static class FileActions
         }
     }
 
-    /// <summary>Dal clic sulla notifica "Pronto per condividere" (thread della UI).</summary>
-    public static async Task ShareFromToastAsync(string id)
+    /// <summary>
+    /// Condividi: Windows apre la finestra solo per l'app in primo piano. Va chiamata dentro il Drop, quando è più
+    /// probabile che Windows lo conceda; se lo rifiuta si ripiega su una notifica, il cui clic dà il primo piano.
+    /// </summary>
+    public static void Share(string[] paths)
     {
-        if (!PendingShares.TryRemove(id, out var paths)) return;
-        try { await ShareAsync(paths); }
-        catch (Exception e)
+        var host = CreateHost();
+        var direct = GetForegroundWindow() == new WindowInteropHelper(host).Handle;
+        Log.Information("Condividi {Mode} su {Paths}", direct ? "diretto" : "via notifica", paths);
+        if (direct)
         {
-            Log.Error(e, "Condividi fallito su {Paths}", paths);
-            JobToasts.Info("Condividi: non riuscito", e.Message);
+            _ = ShareAsync(paths, host);
+            return;
         }
+        host.Close();
+        var id = Guid.NewGuid().ToString("N");
+        PendingShares[id] = paths;
+        JobToasts.ShareReady(id, paths.Length == 1 ? Path.GetFileName(paths[0]) : $"{paths.Length} file");
     }
 
-    // Finestra "Condividi" di Windows (Nearby Share, mail, app…), agganciata a una finestra desktop tramite interop.
-    static async Task ShareAsync(string[] paths)
-    {
-        var items = new List<IStorageItem>();
-        foreach (var p in paths)
-            items.Add(Directory.Exists(p) ? await StorageFolder.GetFolderFromPathAsync(p) : await StorageFile.GetFileFromPathAsync(p));
+    /// <summary>Dal clic sulla notifica "Pronto per condividere" (thread della UI).</summary>
+    public static Task ShareFromToastAsync(string id) =>
+        PendingShares.TryRemove(id, out var paths) ? ShareAsync(paths, CreateHost()) : Task.CompletedTask;
 
-        // finestra d'appoggio invisibile e attivabile: l'isola (WS_EX_NOACTIVATE) non può andare in primo piano
+    // finestra d'appoggio invisibile e attivabile: l'isola (WS_EX_NOACTIVATE) non può andare in primo piano
+    static Window CreateHost()
+    {
         var work = SystemParameters.WorkArea;
         var host = new Window
         {
@@ -99,9 +98,28 @@ static class FileActions
         };
         host.Show();
         host.Activate();
-        var window = new WindowInteropHelper(host).Handle;
+        SetForegroundWindow(new WindowInteropHelper(host).Handle);
         // chiuderla subito potrebbe chiudere anche la finestra Condividi: resta qualche minuto, invisibile
-        _ = Task.Delay(TimeSpan.FromMinutes(3)).ContinueWith(_ => host.Dispatcher.Invoke(host.Close));
+        _ = Task.Delay(TimeSpan.FromMinutes(3)).ContinueWith(_ => host.Dispatcher.Invoke(() => { if (host.IsLoaded) host.Close(); }));
+        return host;
+    }
+
+    // Finestra "Condividi" di Windows (Nearby Share, mail, app…), agganciata alla finestra d'appoggio tramite interop.
+    static async Task ShareAsync(string[] paths, Window host)
+    {
+        try { await ShowShareUiAsync(paths, new WindowInteropHelper(host).Handle); }
+        catch (Exception e)
+        {
+            Log.Error(e, "Condividi fallito su {Paths}", paths);
+            JobToasts.Info("Condividi: non riuscito", e.Message);
+        }
+    }
+
+    static async Task ShowShareUiAsync(string[] paths, IntPtr window)
+    {
+        var items = new List<IStorageItem>();
+        foreach (var p in paths)
+            items.Add(Directory.Exists(p) ? await StorageFolder.GetFolderFromPathAsync(p) : await StorageFile.GetFileFromPathAsync(p));
 
         var interop = DataTransferManager.As<IDataTransferManagerInterop>();
         var iid = new Guid("a5caee9b-8708-49d1-8d36-67d25a8da00c"); // IID di DataTransferManager
@@ -115,6 +133,12 @@ static class FileActions
         manager.DataRequested += OnRequested;
         interop.ShowShareUIForWindow(window);
     }
+
+    [DllImport("user32.dll")]
+    static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    static extern bool SetForegroundWindow(IntPtr hwnd);
 
     [ComImport, Guid("3A3DCD6C-3EAB-43DC-BCDE-45671CE800C8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     interface IDataTransferManagerInterop
