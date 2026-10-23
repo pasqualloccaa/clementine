@@ -15,7 +15,7 @@ public sealed class PdfiumEngine : IEngine
 {
     const double Dpi = 300;
 
-    public bool CanHandle(Operation op) => op.Kind == FileKind.Pdf;
+    public bool CanHandle(Operation op) => op.Kind == FileKind.Pdf && !LibreOfficeEngine.HandlesPdfTo(op.TargetExtension);
 
     public Task RunAsync(Job job, IProgress<double> progress, CancellationToken ct)
     {

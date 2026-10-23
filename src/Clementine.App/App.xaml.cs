@@ -53,7 +53,7 @@ public partial class App : Application
         var exiftool = Path.Combine(tools, "exiftool", "exiftool.exe");
         _pipeline = new Pipeline([
             new MagickEngine(exiftool), new FfmpegEngine(Path.Combine(tools, "ffmpeg")),
-            new PdfiumEngine(), new ArchiveEngine(), new MetadataEngine(exiftool),
+            new LibreOfficeEngine(LibreOfficeEngine.Find()), new PdfiumEngine(), new ArchiveEngine(), new MetadataEngine(exiftool),
         ]);
         _tray = new TrayIcon(BuildMenu);
         var island = new IslandWindow(_settings) { OperationsFor = RingsFor };

@@ -44,7 +44,9 @@ public static class Toolbox
                     break;
             }
         }
-        if (Formats.KindsOf(path).Any(k => k != FileKind.Archive)) tools.Add(Formats.StripMetadata);
+        // ExifTool scrive i metadati di immagini, audio, video e PDF; i documenti Office li sa solo leggere
+        if (Formats.KindsOf(path).Any(k => k is FileKind.Image or FileKind.Audio or FileKind.Video or FileKind.Pdf))
+            tools.Add(Formats.StripMetadata);
         tools.Add(Zip);
         return tools.Distinct();
     }

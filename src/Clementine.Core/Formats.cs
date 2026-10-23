@@ -3,13 +3,17 @@ namespace Clementine.Core;
 /// <summary>Mappa formati (CLAUDE.md, parità con Tangerine) e conversioni proposte dalla ruota.</summary>
 public static class Formats
 {
-    // shortcut: PDF → docx/pptx/xlsx/epub richiede LibreOffice, arriva in M6
+    // Documenti/presentazioni/fogli e PDF → docx/pptx/epub richiedono LibreOffice: senza, quei motori non li accettano.
+    // Verificato su LibreOffice 26.8: niente PDF → xlsx (nessun filtro) né EPUB in ingresso.
     static readonly Dictionary<FileKind, (string[] In, string[] Out)> Map = new()
     {
+        [FileKind.Document] = (["docx", "doc", "odt", "rtf", "txt", "md", "pages"], ["docx", "odt", "pdf", "txt", "md", "epub"]),
+        [FileKind.Presentation] = (["pptx", "ppt", "odp"], ["pptx", "odp", "pdf", "jpg", "png"]),
+        [FileKind.Spreadsheet] = (["xlsx", "xls", "ods", "csv", "tsv"], ["xlsx", "ods", "csv", "tsv", "pdf"]),
         [FileKind.Image] = (["jpg", "png", "webp", "heic", "tiff", "avif", "bmp", "svg", "gif"], ["jpg", "png", "webp", "heic", "tiff", "avif", "bmp"]),
         [FileKind.Audio] = (["mp3", "m4a", "wav", "flac", "ogg", "opus", "aiff", "wma"], ["mp3", "m4a", "wav", "flac", "ogg", "opus", "aiff", "wma"]),
         [FileKind.Video] = (["mp4", "mov", "mkv", "webm", "avi", "wmv", "gif"], ["mp4", "mov", "mkv", "webm", "avi", "wmv", "gif"]),
-        [FileKind.Pdf] = (["pdf"], ["txt", "md", "jpg", "png"]),
+        [FileKind.Pdf] = (["pdf"], ["docx", "pptx", "epub", "txt", "md", "jpg", "png"]),
         [FileKind.Archive] = (["zip", "tar", "tar.gz", "gz", "rar"], ["zip", "tar", "tar.gz"]),
     };
 

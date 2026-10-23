@@ -1,6 +1,6 @@
 namespace Clementine.Core;
 
-public enum FileKind { Image, Audio, Video, Pdf, Archive }
+public enum FileKind { Image, Audio, Video, Pdf, Archive, Document, Presentation, Spreadsheet }
 
 /// <summary>Gli anelli della ruota: nessun modificatore / Shift, Ctrl, Alt.</summary>
 public enum Ring { Convert, Tools, Actions }
