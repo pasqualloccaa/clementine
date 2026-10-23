@@ -7,14 +7,16 @@ using Microsoft.Win32;
 namespace Clementine.App.Shell;
 
 /// <summary>
-/// Voce "Clementine" nel menu del tasto destro di Esplora file (menu classico; su Windows 11 "Mostra altre opzioni").
-/// Tutto sotto HKCU\Software\Classes, senza privilegi: un sottomenu per estensione con Converti in… / Strumenti / Azioni,
-/// ciascuna voce lancia "Clementine.App.exe --op &lt;id&gt; &lt;file&gt;".
+/// Voci "Clementine: …" nel menu del tasto destro di Esplora file (menu classico; su Windows 11 "Mostra altre opzioni").
+/// Tutto sotto HKCU\Software\Classes, senza privilegi; ogni voce lancia "Clementine.App.exe --op &lt;id&gt; &lt;file&gt;".
+/// Esplora file mostra al massimo 16 voci per menu a cascata statico (verificato: oltre, le spariscono in silenzio),
+/// quindi ogni anello è una voce a sé invece di un unico "Clementine" con tre sottomenu.
 /// </summary>
 public static class ContextMenu
 {
+    public const int MaxCascadeItems = 16;
     const string Menus = "Clementine.Menus";
-    static readonly string[] RingNames = ["Converti in…", "Strumenti", "Azioni"];
+    static readonly string[] RingNames = ["Clementine: converti in", "Clementine: strumenti", "Clementine: azioni"];
 
     /// <summary>Le voci di registro da scrivere: (chiave relativa a Classes, nome del valore, dato).</summary>
     public static List<(string Key, string Name, string Value)> Entries(string exe, Func<Operation, bool> canRun)
@@ -24,29 +26,28 @@ public static class ContextMenu
         {
             // due file finti: così compaiono anche le operazioni che uniscono (Unisci PDF), valide con più file
             var rings = Toolbox.RingsFor([$"a.{ext}", $"b.{ext}"]);
-            AddMenu(entries, $@"SystemFileAssociations\.{ext}\shell\Clementine", ext, rings, exe, canRun);
+            AddMenus(entries, @$"SystemFileAssociations\.{ext}\shell", ext, rings, exe, canRun);
         }
-        AddMenu(entries, @"Directory\shell\Clementine", "folder", [[], [Toolbox.Zip], Toolbox.Actions], exe, canRun);
+        AddMenus(entries, @"Directory\shell", "folder", [[], [Toolbox.Zip], Toolbox.Actions], exe, canRun);
         return entries;
     }
 
-    static void AddMenu(List<(string, string, string)> entries, string verbKey, string menu,
+    static void AddMenus(List<(string, string, string)> entries, string shellKey, string menu,
         IReadOnlyList<Operation>[] rings, string exe, Func<Operation, bool> canRun)
     {
-        entries.Add((verbKey, "MUIVerb", "Clementine"));
-        entries.Add((verbKey, "Icon", exe));
-        entries.Add((verbKey, "ExtendedSubCommandsKey", $@"{Menus}\{menu}"));
-        entries.Add((verbKey, "MultiSelectModel", "Player")); // fino a 100 file selezionati invece di 15
         for (var r = 0; r < rings.Length; r++)
         {
-            var ops = rings[r].Where(op => Toolbox.IsAction(op) || canRun(op)).ToList();
+            var ops = rings[r].Where(op => Toolbox.IsAction(op) || canRun(op)).Take(MaxCascadeItems).ToList();
             if (ops.Count == 0) continue;
-            var ring = $@"{Menus}\{menu}\shell\{r + 1}";
-            entries.Add((ring, "MUIVerb", RingNames[r]));
-            entries.Add((ring, "SubCommands", ""));
+            var verbKey = $@"{shellKey}\Clementine.{r + 1}"; // il nome della chiave decide l'ordine delle tre voci
+            var items = $@"{Menus}\{menu}.{r + 1}";
+            entries.Add((verbKey, "MUIVerb", RingNames[r]));
+            entries.Add((verbKey, "Icon", exe));
+            entries.Add((verbKey, "ExtendedSubCommandsKey", items));
+            entries.Add((verbKey, "MultiSelectModel", "Player")); // fino a 100 file selezionati invece di 15
             for (var i = 0; i < ops.Count; i++)
             {
-                var item = $@"{ring}\shell\{i + 1:D2}"; // i nomi delle chiavi decidono l'ordine
+                var item = $@"{items}\shell\{i + 1:D2}";
                 entries.Add((item, "MUIVerb", ops[i].Label));
                 entries.Add(($@"{item}\command", "", $"\"{exe}\" --op {ops[i].Id} \"%1\""));
             }
@@ -72,7 +73,7 @@ public static class ContextMenu
         {
             root.SetValue("Signature", signature);
             // per poter togliere anche le voci di estensioni che in futuro non ci saranno più
-            root.SetValue("VerbKeys", string.Join(";", entries.Select(e => e.Key).Where(k => k.EndsWith(@"\shell\Clementine")).Distinct()));
+            root.SetValue("VerbKeys", string.Join(";", entries.Select(e => e.Key).Where(k => k.Contains(@"\shell\Clementine.")).Distinct()));
         }
         SHChangeNotify(0x08000000, 0, IntPtr.Zero, IntPtr.Zero); // SHCNE_ASSOCCHANGED: Esplora file rilegge i menu
     }

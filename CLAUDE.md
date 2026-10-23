@@ -45,9 +45,10 @@ e dal menu contestuale di Esplora file.
    sugli spicchi e `None` altrove; hit-test per angolo e raggio sul punto del cursore.
 
 ### 3. Clic destro in Esplora file
-- Voce "Clementine" nel menu contestuale dei file (Windows 11: menu classico via
-  `Shift+F10` o "Mostra altre opzioni"; registrazione via `HKCU\Software\Classes\*\shell`
-  con sottomenu "Converti in…", "Strumenti", "Azioni"; in alternativa pacchetto MSIX con
+- Voci "Clementine: converti in", "Clementine: strumenti", "Clementine: azioni" nel menu
+  contestuale dei file (Windows 11: menu classico via `Shift+F10` o "Mostra altre opzioni";
+  registrazione per estensione in `HKCU\Software\Classes\SystemFileAssociations`; tre voci e non
+  un unico "Clementine" perché Esplora file mostra max 16 voci per menu a cascata statico; in alternativa pacchetto MSIX con
   `desktop4:FileExplorerContextMenus` per il menu nuovo).
 - Il comando lancia l'eseguibile con `--op <id> <percorsi>`; se l'app è già aperta, i
   parametri vengono inoltrati all'istanza in esecuzione (named pipe) e il lavoro entra
