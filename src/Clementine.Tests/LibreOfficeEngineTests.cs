@@ -49,6 +49,11 @@ public class LibreOfficeEngineTests
         var csv = await Convert(dir, dir.File("dati.tsv", "nome\tvalore\nmela\t3\n"), "csv", "dati.csv");
         Assert.Equal("nome,valore\nmela,3", File.ReadAllText(csv).Replace("\r\n", "\n").Trim());
 
+        // foglio largo → PDF: una sola pagina per foglio invece delle colonne spezzate su più pagine
+        var xlsx = await Convert(dir, dir.File("largo.csv", string.Join(",", Enumerable.Range(1, 60).Select(i => $"colonna {i}"))), "xlsx", "largo.xlsx");
+        var sheetPdf = await Convert(dir, xlsx, "pdf", "largo.pdf");
+        using (var doc = DocLib.Instance.GetDocReader(sheetPdf, new PageDimensions(1))) Assert.Equal(1, doc.GetPageCount());
+
         // PDF → presentazione → una slide come PNG (passando dal PDF)
         var pptx = await Convert(dir, pdf, "pptx", "nota.pptx");
         var png = await Convert(dir, pptx, "png", "slide.png");

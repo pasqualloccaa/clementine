@@ -32,7 +32,7 @@ public sealed class LibreOfficeEngine(string? soffice) : IEngine
         try
         {
             var slides = job.Op.Kind == FileKind.Presentation && target is "jpg" or "png";
-            var args = new List<string> { "--headless", "--norestore", Profile, "--convert-to", slides ? "pdf" : Filter(target), "--outdir", work };
+            var args = new List<string> { "--headless", "--norestore", Profile, "--convert-to", slides ? "pdf" : Filter(target, job.Op.Kind), "--outdir", work };
             if (Formats.Extension(job.Input) == "tsv") args.Add("--infilter=Text - txt - csv (StarCalc):9,34,76,1");
             if (job.Op.Kind == FileKind.Pdf) args.Add(target == "pptx" ? "--infilter=impress_pdf_import" : "--infilter=writer_pdf_import");
             args.Add(job.Input);
@@ -50,8 +50,10 @@ public sealed class LibreOfficeEngine(string? soffice) : IEngine
         progress.Report(1);
     }
 
-    static string Filter(string target) => target switch
+    static string Filter(string target, FileKind? kind) => target switch
     {
+        // ogni foglio su una sola pagina, larga quanto serve: un prospetto di 19 pagine spezzate diventa 3 pagine leggibili
+        "pdf" when kind == FileKind.Spreadsheet => """pdf:calc_pdf_Export:{"SinglePageSheets":{"type":"boolean","value":"true"}}""",
         "txt" => "txt:Text (encoded):UTF8",
         // separatore, virgolette, UTF-8, prima riga, -, lingua, "tutto il testo tra virgolette" = no, numeri speciali, celle come visualizzate
         "csv" => "csv:Text - txt - csv (StarCalc):44,34,76,1,,0,false,true,true",
