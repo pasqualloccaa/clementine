@@ -11,7 +11,7 @@ public static class Toolbox
 
     static IEnumerable<Operation> ToolsFor(string path)
     {
-        if (!File.Exists(path)) return Directory.Exists(path) ? [Zip] : [];
+        if (Directory.Exists(path)) return [Zip];
         var ext = Formats.Extension(path);
         var tools = new List<Operation>();
         foreach (var kind in Formats.KindsOf(path))
@@ -69,6 +69,13 @@ public static class Toolbox
     /// <summary>I tre anelli, indicizzati per Ring.</summary>
     public static IReadOnlyList<Operation>[] RingsFor(IReadOnlyList<string> paths) =>
         [Formats.ConversionsFor(paths), ToolsFor(paths), paths.Count > 0 ? Actions : []];
+
+    /// <summary>
+    /// L'operazione con quell'id, solo se è davvero proponibile per questi file (stesse regole della ruota).
+    /// Va usata per tutto ciò che arriva da fuori (riga di comando, named pipe).
+    /// </summary>
+    public static Operation? Resolve(string id, IReadOnlyList<string> paths) =>
+        paths.Count == 0 ? null : RingsFor(paths).SelectMany(r => r).FirstOrDefault(o => o.Id == id);
 
     /// <summary>Ritrova un'operazione per id (per "Ripeti" dagli ultimi file).</summary>
     public static Operation? Find(string path, string id) =>

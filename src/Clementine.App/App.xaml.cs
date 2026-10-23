@@ -19,11 +19,30 @@ public partial class App : Application
     readonly AppSettings _settings = AppSettings.Load();
     TrayIcon? _tray;
     Pipeline? _pipeline;
+    SingleInstance? _instance;
+    // Esplora file lancia un processo per ogni file selezionato: le richieste ravvicinate diventano un solo lavoro
+    readonly Dictionary<string, List<string>> _external = [];
+    readonly System.Windows.Threading.DispatcherTimer _externalTimer = new() { Interval = TimeSpan.FromMilliseconds(700) };
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
         AttachConsole(-1); // WinExe: fa arrivare Console.WriteLine al terminale da cui è stata lanciata
+        if (e.Args is ["--unregister"])
+        {
+            ContextMenu.Unregister(Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Classes"));
+            Shutdown();
+            return;
+        }
+        var request = OpRequest.Parse(e.Args);
+        _instance = new SingleInstance(SingleInstance.DefaultName);
+        if (!_instance.IsFirst)
+        {
+            if (request is not null) SingleInstance.TrySend(SingleInstance.DefaultName, request);
+            Shutdown();
+            return;
+        }
+
         Log.Logger = new LoggerConfiguration()
             .WriteTo.File(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Clementine", "logs", "clementine-.log"),
                 rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14)
@@ -43,10 +62,7 @@ public partial class App : Application
         island.Dropped += (op, files) =>
         {
             Console.WriteLine($"[Drop] {op.Label}: {string.Join(", ", files)}");
-            if (op.Id == "action:share") FileActions.Share(files); // dentro il Drop: unica occasione di primo piano
-            else if (Toolbox.IsAction(op))
-                Dispatcher.BeginInvoke(() => FileActions.RunAsync(op, files));
-            else Enqueue(files, op);
+            Run(op, files);
         };
         _pipeline.Started += batch =>
         {
@@ -73,6 +89,47 @@ public partial class App : Application
         };
 
         island.Show();
+
+        try { ContextMenu.Register(Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Classes"), Environment.ProcessPath!, _pipeline.CanRun); }
+        catch (Exception ex) { Log.Error(ex, "Menu di Esplora file non registrato"); }
+        _externalTimer.Tick += (_, _) => RunExternal();
+        _instance.Listen(r => Dispatcher.BeginInvoke(() => AddExternal(r)));
+        if (request is not null) AddExternal(request);
+    }
+
+    /// <summary>Drop sulla ruota o richiesta dal menu di Esplora file: azioni subito, il resto in coda.</summary>
+    void Run(Operation op, string[] files)
+    {
+        if (op.Id == "action:share") FileActions.Share(files); // va chiamata subito: è il momento in cui si ha il primo piano
+        else if (Toolbox.IsAction(op)) Dispatcher.BeginInvoke(() => FileActions.RunAsync(op, files));
+        else Enqueue(files, op);
+    }
+
+    void AddExternal(OpRequest request)
+    {
+        if (!_external.TryGetValue(request.Op, out var files)) _external[request.Op] = files = [];
+        files.AddRange(request.Paths.Except(files));
+        _externalTimer.Stop();
+        _externalTimer.Start();
+    }
+
+    // Le richieste esterne si ricontrollano qui: l'operazione deve essere tra quelle proponibili per quei file.
+    void RunExternal()
+    {
+        _externalTimer.Stop();
+        foreach (var (id, paths) in _external)
+        {
+            var files = paths.Where(p => File.Exists(p) || Directory.Exists(p)).ToArray();
+            var op = Toolbox.Resolve(id, files);
+            if (op is null || !(Toolbox.IsAction(op) || _pipeline!.CanRun(op)))
+            {
+                Log.Warning("Richiesta esterna rifiutata: {Op} su {Files}", id, paths);
+                Toast(() => JobToasts.Info("Operazione non disponibile", $"{id} non si applica a questi file"));
+                continue;
+            }
+            Run(op, files);
+        }
+        _external.Clear();
     }
 
     IReadOnlyList<Operation> OperationsFor(IReadOnlyList<string> files) =>
@@ -160,7 +217,8 @@ public partial class App : Application
     {
         _pipeline?.Dispose();
         _tray?.Dispose();
-        JobToasts.Cleanup();
+        _instance?.Dispose();
+        if (_pipeline is not null) JobToasts.Cleanup(); // solo l'istanza principale: le altre si chiudono subito dopo aver inoltrato
         Log.CloseAndFlush();
         base.OnExit(e);
     }

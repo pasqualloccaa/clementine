@@ -20,6 +20,10 @@ public static class Formats
 
     public static readonly Operation StripMetadata = new("metadata:strip", "Rimuovi metadati", null, null, "senza metadati");
 
+    /// <summary>Estensioni (senza punto) che Clementine sa leggere, alias compresi; "tar.gz" è coperto da "gz".</summary>
+    public static IEnumerable<string> InputExtensions =>
+        Map.Values.SelectMany(v => v.In).Concat(Aliases.Keys).Where(e => !e.Contains('.')).Distinct();
+
     public static string Extension(string path)
     {
         if (path.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase)) return "tar.gz";
