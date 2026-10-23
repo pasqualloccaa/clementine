@@ -4,3 +4,4 @@ obj/
 *.user
 tools/*
 !tools/get-tools.ps1
+.vscode/
