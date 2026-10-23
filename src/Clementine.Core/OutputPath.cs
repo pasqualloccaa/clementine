@@ -8,9 +8,12 @@ public static class OutputPath
     /// </summary>
     public static string Next(string input, string? extension, string? suffix = null)
     {
+        input = Path.TrimEndingDirectorySeparator(input); // "C:\x\cartella\" → il risultato va in C:\x, non dentro
         var dir = Path.GetDirectoryName(input)!;
-        var name = Path.GetFileNameWithoutExtension(input);
-        if (name.EndsWith(".tar", StringComparison.OrdinalIgnoreCase)) name = name[..^4]; // archivio.tar.gz → archivio.zip
+        // una cartella non ha estensione: "Vacanze.2026" resta tale ("Vacanze.2026.zip", non "Vacanze.zip")
+        var isFolder = Directory.Exists(input);
+        var name = isFolder ? Path.GetFileName(input) : Path.GetFileNameWithoutExtension(input);
+        if (!isFolder && name.EndsWith(".tar", StringComparison.OrdinalIgnoreCase)) name = name[..^4]; // archivio.tar.gz → archivio.zip
         if (suffix is not null) name += $" ({suffix})";
         var ext = extension is null ? "" : $".{extension}";
 

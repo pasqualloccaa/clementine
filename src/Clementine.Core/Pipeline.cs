@@ -26,10 +26,12 @@ public sealed class Pipeline : IDisposable
     public event Action<Batch, double>? Progress;
     public event Action<BatchResult>? Completed;
 
+    readonly Task _worker;
+
     public Pipeline(IEnumerable<IEngine> engines)
     {
         _engines = engines.ToList();
-        _ = Task.Run(WorkAsync);
+        _worker = Task.Run(WorkAsync);
     }
 
     public bool CanRun(Operation op) => _engines.Any(e => e.CanHandle(op));
@@ -58,7 +60,17 @@ public sealed class Pipeline : IDisposable
         }
     }
 
-    public void Dispose() => _cts.Cancel(); // i motori uccidono i processi figli sulla cancellazione
+    /// <summary>
+    /// Annulla il lavoro in corso (i motori uccidono i processi figli) e aspetta che cancelli il suo file
+    /// temporaneo: altrimenti chiudendo l'app accanto all'originale resterebbe un "~nome.xxxx.ext" a metà.
+    /// </summary>
+    public void Dispose()
+    {
+        _cts.Cancel();
+        // un motore sincrono (ImageMagick) potrebbe non fermarsi prima; un worker già fallito non deve far fallire la chiusura
+        try { _worker.Wait(TimeSpan.FromSeconds(3)); }
+        catch (AggregateException) { }
+    }
 
     async Task WorkAsync()
     {
@@ -139,7 +151,7 @@ public sealed class Pipeline : IDisposable
         IProgress<double> progress, CancellationToken ct)
     {
         var extension = op.TargetExtension ?? Path.GetExtension(input).TrimStart('.');
-        var temp = Path.Combine(Path.GetDirectoryName(input)!,
+        var temp = Path.Combine(Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(input))!,
             $"~{Path.GetFileNameWithoutExtension(input)}.{Guid.NewGuid().ToString("N")[..8]}.{extension}");
         try
         {

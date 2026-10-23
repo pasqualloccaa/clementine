@@ -82,6 +82,15 @@ public class OutputPathTests
         Assert.Equal(System.IO.Path.Combine(dir.Path, "foto (3).jpg"), OutputPath.Next(input, "jpg"));
     }
 
+    [Fact]
+    public void FolderWithDotInName_KeepsWholeName()
+    {
+        using var dir = new TempDir();
+        var folder = Directory.CreateDirectory(System.IO.Path.Combine(dir.Path, "Vacanze.2026")).FullName;
+        Assert.Equal(System.IO.Path.Combine(dir.Path, "Vacanze.2026.zip"), OutputPath.Next(folder, "zip"));
+        Assert.Equal(System.IO.Path.Combine(dir.Path, "Vacanze.2026.zip"), OutputPath.Next(folder + @"\", "zip"));
+    }
+
     [Theory]
     [InlineData("archivio.tar.gz", "zip", null, "archivio.zip")]
     [InlineData("foto.jpg", "jpg", "senza metadati", "foto (senza metadati).jpg")]

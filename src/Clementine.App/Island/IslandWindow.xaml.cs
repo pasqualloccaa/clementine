@@ -25,13 +25,10 @@ public partial class IslandWindow : Window
     readonly List<Path> _slices = [];
     readonly List<UIElement> _wheelItems = [];
     static readonly string[] RingNames = ["Converti", "Strumenti", "Azioni"];
-    static readonly TimeSpan HubDwell = TimeSpan.FromMilliseconds(800); // 400 ms era troppo rapido all'uso
+    readonly HubDwell _hub = new(TimeSpan.FromMilliseconds(800)); // 400 ms era troppo rapido all'uso
     IReadOnlyList<Operation>[] _rings = [];
     IReadOnlyList<Operation> _ops = [];
     Ring _ring, _manualRing;
-    DateTime? _hubSince;
-    // la ruota si apre centrata sul cursore, cioè sul mozzo: il cambio d'anello vale solo dopo esserne usciti una volta
-    bool _hubArmed;
     Rect _dockArea;
     bool _wheelOpen, _working;
     int _hot = -1;
@@ -249,16 +246,8 @@ public partial class IslandWindow : Window
         if (_wheelOpen)
         {
             var ring = RingFor(e);
-            var inHub = dx * dx + dy * dy < HubRadius * HubRadius;
-            if (!inHub) _hubArmed = true;
-            var onHub = inHub && _hubArmed && ring == _manualRing;
-            if (!onHub) _hubSince = null;
-            else if (_hubSince is null) _hubSince = DateTime.UtcNow;
-            else if (DateTime.UtcNow - _hubSince >= HubDwell) // restando fermi gira ancora a ogni intervallo
-            {
+            if (_hub.Update(dx * dx + dy * dy < HubRadius * HubRadius, modifierHeld: ring != _manualRing, DateTime.UtcNow))
                 ring = _manualRing = NextRing(_manualRing);
-                _hubSince = DateTime.UtcNow;
-            }
             if (ring != _ring) ShowRing(ring);
         }
         SetHot(_wheelOpen ? WheelLayout.HitTest(dx, dy, HubRadius, OuterRadius, _ops.Count) : -1);
@@ -278,8 +267,7 @@ public partial class IslandWindow : Window
         {
             _rings = rings;
             _manualRing = rings[(int)Ring.Convert].Count > 0 ? Ring.Convert : NextRing(Ring.Convert);
-            _hubSince = null;
-            _hubArmed = false;
+            _hub.Reset();
             ShowRing(RingFor(e));
             OpenWheel(e);
         }

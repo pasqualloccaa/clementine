@@ -41,7 +41,12 @@ static class FileActions
 
                 case "action:terminal":
                     var dir = Directory.Exists(paths[0]) ? paths[0] : Path.GetDirectoryName(paths[0])!;
-                    try { Process.Start(new ProcessStartInfo("wt.exe") { ArgumentList = { "-d", dir } }); }
+                    try
+                    {
+                        var wt = new ProcessStartInfo("wt.exe");
+                        foreach (var arg in TerminalArgs(dir)) wt.ArgumentList.Add(arg);
+                        Process.Start(wt);
+                    }
                     catch (Win32Exception) // Windows Terminal non installato
                     {
                         Process.Start(new ProcessStartInfo("powershell.exe") { WorkingDirectory = dir, UseShellExecute = true });
@@ -82,6 +87,12 @@ static class FileActions
         PendingShares[id] = paths;
         JobToasts.ShareReady(id, paths.Length == 1 ? Path.GetFileName(paths[0]) : $"{paths.Length} file");
     }
+
+    /// <summary>
+    /// Argomenti per Windows Terminal. Per wt il ";" separa due comandi: una cartella chiamata
+    /// "x ; new-tab calc" lancerebbe calc. "\;" è il ";" letterale.
+    /// </summary>
+    internal static string[] TerminalArgs(string dir) => ["-d", dir.Replace(";", @"\;")];
 
     /// <summary>Dal clic sulla notifica "Pronto per condividere" (thread della UI).</summary>
     public static Task ShareFromToastAsync(string id) =>

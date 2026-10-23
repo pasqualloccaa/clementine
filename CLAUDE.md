@@ -135,6 +135,8 @@ Copia in…, Sposta in…, Copia percorso, Apri terminale qui, Condividi (Nearby
 
 ## Convenzioni per Claude Code
 - Lavora per **milestone** (sotto), ognuna con test e un commit.
+- Il test di velocità (HEIC → JPG < 1 s) gira solo con `CLEMENTINE_PERF=1`, a PC tranquillo: subito dopo una
+  build Windows scansiona i binari nuovi e la misura sfora.
 - Ogni engine implementa `IEngine { bool CanHandle(Operation); Task RunAsync(Job, IProgress<double>, CancellationToken); }`.
 - Niente servizi cloud, niente API a pagamento, niente telemetria.
 - I binari esterni stanno in `tools/` e vengono scaricati da `tools/get-tools.ps1` (ffmpeg, exiftool); LibreOffice è opzionale e rilevato se installato.

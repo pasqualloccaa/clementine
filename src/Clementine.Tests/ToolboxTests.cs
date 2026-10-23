@@ -132,6 +132,25 @@ public class PipelineQueueTests
     }
 
     [Fact]
+    public async Task Dispose_DuringWork_LeavesNoHalfFile()
+    {
+        using var dir = new TempDir();
+        var started = new TaskCompletionSource();
+        var pipeline = new Pipeline([new FakeEngine(async (j, ct) =>
+        {
+            await File.WriteAllTextAsync(j.Output, "a metà", CancellationToken.None);
+            started.TrySetResult();
+            await Task.Delay(Timeout.Infinite, ct);
+        })]);
+        pipeline.Enqueue([dir.File("video.mp4")], ToJpg);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        pipeline.Dispose(); // come alla chiusura dell'app: subito dopo il processo esce
+
+        Assert.Equal(["video.mp4"], Directory.GetFiles(dir.Path).Select(Path.GetFileName));
+    }
+
+    [Fact]
     public async Task Cancel_StopsRunningBatch_AndSkipsWaitingOne()
     {
         using var dir = new TempDir();

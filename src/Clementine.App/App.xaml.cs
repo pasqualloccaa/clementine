@@ -38,7 +38,9 @@ public partial class App : Application
         _instance = new SingleInstance(SingleInstance.DefaultName);
         if (!_instance.IsFirst)
         {
-            if (request is not null) SingleInstance.TrySend(SingleInstance.DefaultName, request);
+            // se l'istanza aperta non risponde (es. ancora in avvio), il clic non deve sparire nel nulla
+            if (request is not null && !SingleInstance.TrySend(SingleInstance.DefaultName, request))
+                JobToasts.Info("Clementine non risponde", "Riprova tra qualche secondo.");
             Shutdown();
             return;
         }
