@@ -30,6 +30,8 @@ public partial class IslandWindow : Window
     IReadOnlyList<Operation> _ops = [];
     Ring _ring, _manualRing;
     DateTime? _hubSince;
+    // la ruota si apre centrata sul cursore, cioè sul mozzo: il cambio d'anello vale solo dopo esserne usciti una volta
+    bool _hubArmed;
     Rect _dockArea;
     bool _wheelOpen, _working;
     int _hot = -1;
@@ -247,7 +249,9 @@ public partial class IslandWindow : Window
         if (_wheelOpen)
         {
             var ring = RingFor(e);
-            var onHub = dx * dx + dy * dy < HubRadius * HubRadius && ring == _manualRing;
+            var inHub = dx * dx + dy * dy < HubRadius * HubRadius;
+            if (!inHub) _hubArmed = true;
+            var onHub = inHub && _hubArmed && ring == _manualRing;
             if (!onHub) _hubSince = null;
             else if (_hubSince is null) _hubSince = DateTime.UtcNow;
             else if (DateTime.UtcNow - _hubSince >= HubDwell) // restando fermi gira ancora a ogni intervallo
@@ -275,6 +279,7 @@ public partial class IslandWindow : Window
             _rings = rings;
             _manualRing = rings[(int)Ring.Convert].Count > 0 ? Ring.Convert : NextRing(Ring.Convert);
             _hubSince = null;
+            _hubArmed = false;
             ShowRing(RingFor(e));
             OpenWheel(e);
         }
