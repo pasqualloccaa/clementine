@@ -135,3 +135,31 @@ public class ResolveTests
         Assert.Null(Toolbox.Resolve("convert:png", []));
     }
 }
+
+public class AutostartTests : IDisposable
+{
+    const string Exe = @"C:\Program Files\Clementine\Clementine.App.exe";
+    readonly string _root = $@"Software\Clementine.Tests\{Guid.NewGuid():N}";
+    readonly RegistryKey _run;
+
+    public AutostartTests() => _run = Registry.CurrentUser.CreateSubKey(_root);
+
+    public void Dispose()
+    {
+        _run.Dispose();
+        Registry.CurrentUser.DeleteSubKeyTree(_root, throwOnMissingSubKey: false);
+    }
+
+    [Fact]
+    public void OnOff_WritesQuotedPath_AndMovedExeCountsAsOff()
+    {
+        Assert.False(Clementine.App.Settings.Autostart.IsOn(_run, Exe));
+        Clementine.App.Settings.Autostart.Set(_run, Exe, true);
+        Assert.Equal($"\"{Exe}\"", _run.GetValue("Clementine")); // virgolette: il percorso ha spazi
+        Assert.True(Clementine.App.Settings.Autostart.IsOn(_run, Exe));
+        Assert.False(Clementine.App.Settings.Autostart.IsOn(_run, @"D:\Altrove\Clementine.App.exe"));
+        Clementine.App.Settings.Autostart.Set(_run, Exe, false);
+        Clementine.App.Settings.Autostart.Set(_run, Exe, false); // spegnere due volte non è un errore
+        Assert.Null(_run.GetValue("Clementine"));
+    }
+}

@@ -20,6 +20,8 @@ public partial class App : Application
     TrayIcon? _tray;
     Pipeline? _pipeline;
     SingleInstance? _instance;
+    SettingsWindow? _settingsWindow;
+    static readonly string LogFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Clementine", "logs");
     // Esplora file lancia un processo per ogni file selezionato: le richieste ravvicinate diventano un solo lavoro
     readonly Dictionary<string, List<string>> _external = [];
     readonly System.Windows.Threading.DispatcherTimer _externalTimer = new() { Interval = TimeSpan.FromMilliseconds(700) };
@@ -28,9 +30,10 @@ public partial class App : Application
     {
         base.OnStartup(e);
         AttachConsole(-1); // WinExe: fa arrivare Console.WriteLine al terminale da cui è stata lanciata
-        if (e.Args is ["--unregister"])
+        if (e.Args is ["--unregister"]) // per la disinstallazione: niente resta nel registro
         {
             ContextMenu.Unregister(Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Classes"));
+            using (var run = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(Autostart.RunKey)) Autostart.Set(run, Environment.ProcessPath!, false);
             Shutdown();
             return;
         }
@@ -46,7 +49,7 @@ public partial class App : Application
         }
 
         Log.Logger = new LoggerConfiguration()
-            .WriteTo.File(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Clementine", "logs", "clementine-.log"),
+            .WriteTo.File(Path.Combine(LogFolder, "clementine-.log"),
                 rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14)
             .CreateLogger();
         JobToasts.Init(id => _pipeline?.Cancel(id), id => Dispatcher.BeginInvoke(() => FileActions.ShareFromToastAsync(id)));
@@ -92,8 +95,7 @@ public partial class App : Application
 
         island.Show();
 
-        try { ContextMenu.Register(Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Classes"), Environment.ProcessPath!, _pipeline.CanRun); }
-        catch (Exception ex) { Log.Error(ex, "Menu di Esplora file non registrato"); }
+        SetExplorerMenu(_settings.ExplorerMenu);
         _externalTimer.Tick += (_, _) => RunExternal();
         _instance.Listen(r => Dispatcher.BeginInvoke(() => AddExternal(r)));
         if (request is not null) AddExternal(request);
@@ -173,7 +175,40 @@ public partial class App : Application
 
         // appunti letti solo qui, all'apertura del menu: mai durante un drag
         if (ClipboardMenu() is { } clipboard) items.Add(clipboard);
+        items.Add(new Forms.ToolStripMenuItem("Impostazioni…", null, (_, _) => ShowSettings()));
         items.Add(new Forms.ToolStripMenuItem("Esci", null, (_, _) => Shutdown()));
+    }
+
+    void ShowSettings()
+    {
+        if (_settingsWindow is not null) { _settingsWindow.Activate(); return; }
+        using var run = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(Autostart.RunKey);
+        _settingsWindow = new SettingsWindow(
+            Autostart.IsOn(run, Environment.ProcessPath!), on =>
+            {
+                using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(Autostart.RunKey);
+                Autostart.Set(key, Environment.ProcessPath!, on);
+            },
+            _settings.ExplorerMenu, on =>
+            {
+                _settings.ExplorerMenu = on;
+                _settings.Save();
+                SetExplorerMenu(on);
+            },
+            LibreOfficeEngine.Find(), LogFolder);
+        _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+        _settingsWindow.Show();
+    }
+
+    void SetExplorerMenu(bool on)
+    {
+        try
+        {
+            using var classes = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Classes");
+            if (on) ContextMenu.Register(classes, Environment.ProcessPath!, _pipeline!.CanRun);
+            else ContextMenu.Unregister(classes);
+        }
+        catch (Exception ex) { Log.Error(ex, "Menu di Esplora file non aggiornato"); }
     }
 
     Forms.ToolStripMenuItem? ClipboardMenu()
