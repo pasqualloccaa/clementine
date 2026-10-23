@@ -13,34 +13,49 @@ namespace Clementine.Engines;
 
 /// <summary>
 /// PDF → Word con testo che scorre: paragrafi nell'ordine di lettura, titoli riconosciuti dalla dimensione del carattere,
-/// grassetto, corsivo e colore, tabelle, immagini al loro posto. Niente caselle di testo come l'importazione PDF di LibreOffice.
-/// shortcut: i PDF scansionati restano immagini (niente OCR) e i punti elenco disegnati come grafica si perdono.
+/// grassetto, corsivo e colore, elenchi puntati, tabelle, immagini al loro posto. Niente caselle di testo come l'importazione PDF di LibreOffice.
+/// shortcut: i PDF scansionati restano immagini (niente OCR) e i disegni vettoriali si perdono.
 /// </summary>
 static class PdfToWord
 {
     const long EmuPerPoint = 12700;
 
     sealed record Run(string Text, bool Bold, bool Italic, string? Color);
-    sealed record Paragraph(List<Run> Runs, double Size, int Lines);
+    sealed record Paragraph(List<Run> Runs, double Size, int Lines, string Font, int List); // List: 0 niente, 1 puntato, 2 caselle
     sealed record Picture(byte[] Data, string Extension, double Width, double Height);
     sealed record Table(List<List<List<Paragraph>>> Rows, double[] Widths);
 
     public static void Convert(string input, string output, IProgress<double> progress, CancellationToken ct)
     {
         using var pdf = PdfDocument.Open(input);
-        var pages = new List<(Page Page, List<(double Top, object Item)> Items)>();
+        var pages = new List<(Page Page, List<PdfRectangle> Bullets, List<(double Top, object Item)> Items)>();
         var marginTexts = new Dictionary<string, int>(); // testi ripetuti in testa o a piè di pagina: intestazioni da togliere
         var imagePages = new Dictionary<string, int>(); // idem per le immagini: il logo su ogni pagina
         var sizes = new Dictionary<double, int>();
+        var fonts = new Dictionary<string, int>();
         PdfRectangle firstPage = default;
 
         foreach (var page in pdf.GetPages())
         {
             ct.ThrowIfCancellationRequested();
             if (page.Number == 1) firstPage = page.MediaBox.Bounds;
-            var words = NearestNeighbourWordExtractor.Instance.GetWords(page.Letters);
+            var (horizontal, vertical, bullets) = Graphics(page);
+            var words = NearestNeighbourWordExtractor.Instance.GetWords(page.Letters).ToList();
+            // le tabelle con i bordi disegnati si leggono dalla griglia, parola per parola: il resto passa all'analisi dei blocchi
+            var grids = FindGrids(horizontal, vertical).Select(g => ToTableBlocks(g, words)).Where(t => t.Words!.Count > 0).ToList();
+            words = words.Except(grids.SelectMany(g => g.Words!)).ToList();
             var blocks = UnsupervisedReadingOrderDetector.Instance.Get(DocstrumBoundingBoxes.Instance.GetBlocks(words)).ToList();
-            foreach (var letter in page.Letters) sizes[Math.Round(letter.PointSize)] = sizes.GetValueOrDefault(Math.Round(letter.PointSize)) + 1;
+            // pallini scritti come carattere in un blocco a parte (PDF da Word): sono segni di elenco come quelli disegnati
+            foreach (var marker in blocks.Where(b => IsMarker(b.Text)).ToList())
+            {
+                bullets.Add(marker.BoundingBox);
+                blocks.Remove(marker);
+            }
+            foreach (var letter in page.Letters)
+            {
+                sizes[Math.Round(letter.PointSize)] = sizes.GetValueOrDefault(Math.Round(letter.PointSize)) + 1;
+                fonts[Family(letter.FontName)] = fonts.GetValueOrDefault(Family(letter.FontName)) + 1;
+            }
             foreach (var key in blocks.Where(b => InMargin(b, page)).Select(MarginKey).Distinct())
                 marginTexts[key] = marginTexts.GetValueOrDefault(key) + 1;
 
@@ -55,35 +70,87 @@ static class PdfToWord
                 }
                 items.Add((block.BoundingBox.Top, block));
             }
-            // le immagini entrano prima del primo elemento che sta più in basso di loro
+            // tabelle a griglia e immagini entrano dopo l'ultimo elemento che sta più in alto di loro
+            // (non prima del primo più in basso: l'ordine di lettura può mettere in testa il piè di pagina)
+            void Insert(double top, object item) => items.Insert(items.FindLastIndex(i => i.Top >= top) + 1, (top, item));
+            foreach (var grid in grids) Insert(grid.Top, grid);
             foreach (var image in page.GetImages().OrderByDescending(i => i.BoundingBox.Top))
             {
                 imagePages[ImageKey(image)] = imagePages.GetValueOrDefault(ImageKey(image)) + 1;
-                var at = items.FindIndex(i => i.Top < image.BoundingBox.Top);
-                items.Insert(at < 0 ? items.Count : at, (image.BoundingBox.Top, image));
+                Insert(image.BoundingBox.Top, image);
             }
-            pages.Add((page, items));
+            pages.Add((page, bullets, items));
             progress.Report(0.8 * page.Number / pdf.NumberOfPages);
         }
 
         var body = sizes.Count == 0 ? 11 : sizes.MaxBy(s => s.Value).Key;
+        var bodyFont = fonts.Count == 0 ? "" : fonts.MaxBy(f => f.Value).Key;
         var repeated = marginTexts.Concat(imagePages).Where(m => pdf.NumberOfPages >= 3 && m.Value * 2 >= pdf.NumberOfPages).Select(m => m.Key).ToHashSet();
         var content = new List<object>();
-        foreach (var (page, items) in pages)
+        foreach (var (page, bullets, items) in pages)
+        {
+            TextBlock? previous = null;
             foreach (var (_, item) in items)
                 switch (item)
                 {
                     case IPdfImage image when !repeated.Contains(ImageKey(image)) && ToPicture(image) is { } picture: content.Add(picture); break;
-                    case TableBlocks table: content.Add(ToTable(table, body)); break;
+                    case TableBlocks table: AddTable(content, ToTable(table, body, bullets)); break;
                     case TextBlock block when !(InMargin(block, page) && (repeated.Contains(MarginKey(block)) || IsPageNumber(block))):
-                        content.AddRange(ToParagraphs(block, body)); break;
+                        var paragraphs = ToParagraphs(block, body, bullets);
+                        // pezzi della stessa riga separati da spazi larghi ("8 ott 2026 · @Pasquale", "1." e il testo della voce): restano una riga
+                        if (previous is { TextLines.Count: 1 } && content.Count > 0 && content[^1] is Paragraph last && paragraphs.Count > 0
+                            && Math.Abs(previous.TextLines[0].Words[0].Letters[0].StartBaseLine.Y - block.TextLines[0].Words[0].Letters[0].StartBaseLine.Y) < 2
+                            && block.BoundingBox.Left > previous.BoundingBox.Right)
+                        {
+                            content[^1] = last with { Runs = [.. last.Runs.SkipLast(1), last.Runs[^1] with { Text = last.Runs[^1].Text + " " }, .. paragraphs[0].Runs], Lines = paragraphs[0].Lines };
+                            content.AddRange(paragraphs.Skip(1));
+                        }
+                        // frase spezzata dal cambio pagina: "…che li integra nella" + "chat con i dati…"
+                        else if (previous is null && content.Count > 0 && content[^1] is Paragraph open && paragraphs.Count > 0 && open.List == paragraphs[0].List
+                                 && open.Runs[^1].Text.TrimEnd() is [.., var end] && !".:;!?".Contains(end)
+                                 && paragraphs[0].Runs[0].Text is [var start, ..] && char.IsLower(start))
+                        {
+                            content[^1] = open with { Runs = [.. open.Runs.SkipLast(1), open.Runs[^1] with { Text = open.Runs[^1].Text.TrimEnd() + " " }, .. paragraphs[0].Runs], Lines = open.Lines + paragraphs[0].Lines };
+                            content.AddRange(paragraphs.Skip(1));
+                        }
+                        else content.AddRange(paragraphs);
+                        previous = block;
+                        break;
                 }
-        Write(output, content, Headings(content, body), firstPage);
+        }
+        Write(output, content, Headings(content, body, bodyFont), firstPage);
         progress.Report(1);
     }
 
+    // "BAAAAA+AnthropicSansPrint-Semibold" → "AnthropicSansPrint": la famiglia, senza sottoinsieme né stile
+    static string Family(string? font)
+    {
+        var name = font ?? "";
+        if (name.IndexOf('+') is 6) name = name[7..];
+        return name.Split('-', ',')[0];
+    }
+
+    /// <summary>Una tabella spezzata su due pagine torna una: stesse colonne, e l'intestazione ripetuta si toglie.</summary>
+    static void AddTable(List<object> content, Table table)
+    {
+        if (content.Count > 0 && content[^1] is Table previous && previous.Widths.Length == table.Widths.Length
+            && previous.Widths.Zip(table.Widths).All(w => Math.Abs(w.First - w.Second) <= 4))
+        {
+            var rows = table.Rows.Count > 1 && CellTexts(table.Rows[0]).SequenceEqual(CellTexts(previous.Rows[0])) ? table.Rows.Skip(1) : table.Rows;
+            previous.Rows.AddRange(rows);
+            return;
+        }
+        content.Add(table);
+    }
+
+    static IEnumerable<string> CellTexts(List<List<Paragraph>> row) => row.Select(c => string.Concat(c.SelectMany(p => p.Runs).Select(r => r.Text)).Trim());
+
+    // fascia alta e bassa della pagina: lì stanno intestazioni e piè di pagina (anche su due righe)
     static bool InMargin(TextBlock block, Page page) =>
-        block.BoundingBox.Bottom > page.Height * 0.93 || block.BoundingBox.Top < page.Height * 0.07;
+        block.BoundingBox.Bottom > page.Height * 0.88 || block.BoundingBox.Top < page.Height * 0.12;
+
+    // \uF0B7 e \uF0A7: pallino e quadratino di Word nei font Symbol e Wingdings
+    static bool IsMarker(string text) => text.Trim() is "•" or "◦" or "▪" or "▫" or "●" or "○" or "■" or "□" or "‣" or "∙" or "❑" or "☐" or "\uF0B7" or "\uF0A7";
 
     // "Pagina 3 di 10" e "Pagina 4 di 10" sono la stessa intestazione
     static string MarginKey(TextBlock block) => new(block.Text.Where(c => !char.IsDigit(c)).ToArray());
@@ -94,31 +161,49 @@ static class PdfToWord
 
     /// <summary>
     /// Un blocco può contenere più paragrafi (o voci di elenco): si va a capo dove la riga finisce prima del margine
-    /// pur avendo spazio per la parola successiva, cioè dove chi ha scritto ha premuto Invio.
+    /// pur avendo spazio per la parola successiva, cioè dove chi ha scritto ha premuto Invio. Una riga con un pallino
+    /// disegnato alla sua sinistra apre una voce di elenco.
     /// </summary>
-    static List<Paragraph> ToParagraphs(TextBlock block, double body)
+    static List<Paragraph> ToParagraphs(TextBlock block, double body, List<PdfRectangle> bullets)
     {
         var paragraphs = new List<Paragraph>();
         var runs = new List<Run>();
         var letters = 0;
         var weighted = 0.0;
         var lines = 0;
+        var list = 0;
+        var fonts = new Dictionary<string, int>();
         void Flush()
         {
-            if (runs.Count > 0) paragraphs.Add(new Paragraph(runs, letters == 0 ? body : weighted / letters, lines));
+            if (runs.Count > 0)
+                paragraphs.Add(new Paragraph(runs, letters == 0 ? body : weighted / letters, lines, fonts.MaxBy(f => f.Value).Key, list));
             runs = [];
-            (letters, weighted, lines) = (0, 0, 0);
+            (letters, weighted, lines, list) = (0, 0, 0, 0);
+            fonts.Clear();
         }
 
         var all = block.TextLines;
         for (var l = 0; l < all.Count; l++)
         {
             var line = all[l];
+            var box = line.BoundingBox;
+            if (bullets.FirstOrDefault(b => b.Right <= box.Left + 1 && box.Left - b.Right < 20 && b.Centroid.Y > box.Bottom - 2 && b.Centroid.Y < box.Top + 2) is { Width: > 0 } marker)
+            {
+                Flush();
+                list = marker.Width > 6.5 ? 2 : 1; // i pallini sono piccoli, le caselle da spuntare più grandi
+            }
+            var start = 0;
+            if (line.Words.Count > 1 && IsMarker(line.Words[0].Text)) // pallino come prima parola della riga
+            {
+                Flush();
+                list = 1;
+                start = 1;
+            }
             var next = l + 1 < all.Count ? all[l + 1].Words.FirstOrDefault() : null;
             var breakAfter = next is not null &&
                 block.BoundingBox.Right - line.BoundingBox.Right > next.BoundingBox.Width + next.Letters[0].PointSize;
             lines++;
-            for (var w = 0; w < line.Words.Count; w++)
+            for (var w = start; w < line.Words.Count; w++)
             {
                 var word = line.Words[w];
                 var text = word.Text;
@@ -130,6 +215,7 @@ static class PdfToWord
                 AddRun(runs, text, word);
                 letters += word.Letters.Count;
                 weighted += word.Letters.Sum(x => x.PointSize);
+                fonts[Family(word.FontName)] = fonts.GetValueOrDefault(Family(word.FontName)) + word.Letters.Count;
             }
             if (breakAfter) Flush();
         }
@@ -152,11 +238,12 @@ static class PdfToWord
 
     /// <summary>
     /// Livello di titolo per ogni paragrafo: le dimensioni di carattere più grandi del testo, dalla maggiore, diventano Titolo 1, 2, 3.
+    /// Conta anche un carattere appena più grande ma di un'altra famiglia (titoli con grazie in un testo senza).
     /// Un titolo andato a capo su due blocchi (interlinea larga) torna un titolo solo.
     /// </summary>
-    static Dictionary<Paragraph, int> Headings(List<object> content, double body)
+    static Dictionary<Paragraph, int> Headings(List<object> content, double body, string bodyFont)
     {
-        static bool Candidate(Paragraph p, double body) => p.Lines <= 3 && p.Size >= body * 1.15;
+        bool Candidate(Paragraph p, double body) => p.Lines <= 3 && p.List == 0 && (p.Size >= body * 1.15 || p.Size >= body * 1.05 && p.Font != bodyFont);
         var levels = content.OfType<Paragraph>().Where(p => Candidate(p, body)).Select(p => Math.Round(p.Size))
             .Distinct().OrderDescending().Select((size, i) => (size, level: Math.Min(i + 1, 3))).ToDictionary(x => x.size, x => x.level);
         var headings = new Dictionary<Paragraph, int>();
@@ -180,7 +267,98 @@ static class PdfToWord
 
     // ---- tabelle ----
 
-    sealed record TableBlocks(List<TextBlock> Blocks, List<List<List<TextBlock>>> Rows, double[] Lefts, double Right);
+    // Blocks: i blocchi che la tabella sostituisce nell'ordine di lettura (vuoto per le griglie, che si collocano con Top e hanno le loro Words)
+    sealed record TableBlocks(List<TextBlock> Blocks, List<List<List<TextBlock>>> Rows, double[] Lefts, double Right, double Top = 0, List<Word>? Words = null);
+
+    /// <summary>Linee orizzontali e verticali (tratti o rettangoli sottili) e pallini degli elenchi disegnati sulla pagina.</summary>
+    static (List<PdfRectangle> Horizontal, List<PdfRectangle> Vertical, List<PdfRectangle> Bullets) Graphics(Page page)
+    {
+        List<PdfRectangle> horizontal = [], vertical = [], bullets = [];
+        foreach (var path in page.ExperimentalAccess.Paths)
+            foreach (var sub in path)
+            {
+                if (sub.GetBoundingRectangle() is not { } box) continue;
+                if (box.Height <= 2 && box.Width > 4) horizontal.Add(box);
+                else if (box.Width <= 2 && box.Height > 4) vertical.Add(box);
+                else if (box.Width is > 2 and < 12 && box.Height is > 2 and < 12 && Math.Abs(box.Width - box.Height) < 1.5) bullets.Add(box);
+                else if (path.IsStroked) // riquadro disegnato col contorno: i suoi quattro lati
+                {
+                    horizontal.Add(new PdfRectangle(box.Left, box.Top, box.Right, box.Top));
+                    horizontal.Add(new PdfRectangle(box.Left, box.Bottom, box.Right, box.Bottom));
+                    vertical.Add(new PdfRectangle(box.Left, box.Bottom, box.Left, box.Top));
+                    vertical.Add(new PdfRectangle(box.Right, box.Bottom, box.Right, box.Top));
+                }
+            }
+        return (horizontal, vertical, bullets);
+    }
+
+    /// <summary>
+    /// Griglie: linee orizzontali e verticali che si toccano. Servono almeno due celle,
+    /// così un riquadro singolo (un blocco di codice incorniciato) non diventa una tabella.
+    /// </summary>
+    static List<(double[] Xs, double[] Ys)> FindGrids(List<PdfRectangle> horizontal, List<PdfRectangle> vertical)
+    {
+        static bool Touch(PdfRectangle h, PdfRectangle v) =>
+            v.Left >= h.Left - 2 && v.Right <= h.Right + 2 && h.Bottom >= v.Bottom - 2 && h.Top <= v.Top + 2;
+        static double[] Distinct(IEnumerable<double> values)
+        {
+            var result = new List<double>();
+            foreach (var v in values.Order())
+                if (result.Count == 0 || v - result[^1] > 4) result.Add(v);
+            return [.. result];
+        }
+
+        var grids = new List<(double[], double[])>();
+        var seen = new HashSet<PdfRectangle>();
+        foreach (var start in horizontal)
+        {
+            if (!seen.Add(start)) continue;
+            List<PdfRectangle> hs = [start], vs = [];
+            for (var changed = true; changed;)
+            {
+                changed = false;
+                foreach (var v in vertical.Where(v => !vs.Contains(v) && hs.Any(h => Touch(h, v))).ToList()) { vs.Add(v); changed = true; }
+                foreach (var h in horizontal.Where(h => !hs.Contains(h) && vs.Any(v => Touch(h, v))).ToList()) { hs.Add(h); seen.Add(h); changed = true; }
+            }
+            var xs = Distinct(vs.Select(v => (v.Left + v.Right) / 2));
+            var ys = Distinct(hs.Select(h => (h.Top + h.Bottom) / 2)).Reverse().ToArray(); // dall'alto
+            if (xs.Length >= 2 && ys.Length >= 2 && (xs.Length - 1) * (ys.Length - 1) >= 2) grids.Add((xs, ys));
+        }
+        return grids;
+    }
+
+    /// <summary>Le parole dentro la griglia, cella per cella, raccolte in righe di testo come farebbe l'analisi dei blocchi.</summary>
+    static TableBlocks ToTableBlocks((double[] Xs, double[] Ys) grid, List<Word> words)
+    {
+        var (xs, ys) = grid;
+        static bool In(Word w, double left, double right, double top, double bottom) =>
+            w.BoundingBox.Centroid.X > left && w.BoundingBox.Centroid.X < right && w.BoundingBox.Centroid.Y < top && w.BoundingBox.Centroid.Y > bottom;
+        var inside = words.Where(w => In(w, xs[0], xs[^1], ys[0], ys[^1])).ToList();
+        var text = inside.Where(w => !string.IsNullOrWhiteSpace(w.Text)).ToList(); // gli spazi del PDF come parole: doppi spazi
+        var rows = new List<List<List<TextBlock>>>();
+        for (var r = 0; r + 1 < ys.Length; r++)
+        {
+            var row = new List<List<TextBlock>>();
+            for (var c = 0; c + 1 < xs.Length; c++)
+            {
+                var cell = text.Where(w => In(w, xs[c], xs[c + 1], ys[r], ys[r + 1])).ToList();
+                row.Add(cell.Count == 0 ? [] : [new TextBlock(Lines(cell))]);
+            }
+            if (row.Any(cell => cell.Count > 0)) rows.Add(row); // righe vuote: doppie linee, bordi spessi
+        }
+        return new TableBlocks([], rows, xs[..^1], xs[^1] - 6, ys[0], inside);
+    }
+
+    static List<TextLine> Lines(List<Word> words)
+    {
+        var lines = new List<List<Word>>();
+        // per linea di base e dimensione del carattere: il riquadro delle parole in certi PDF è alto zero
+        static double Baseline(Word w) => w.Letters[0].StartBaseLine.Y;
+        foreach (var word in words.OrderByDescending(Baseline))
+            if (lines.Count > 0 && Math.Abs(Baseline(lines[^1][0]) - Baseline(word)) < word.Letters[0].PointSize / 2) lines[^1].Add(word);
+            else lines.Add([word]);
+        return lines.Select(l => new TextLine(l.OrderBy(w => w.BoundingBox.Left).ToList())).ToList();
+    }
 
     /// <summary>
     /// Tabelle riconosciute dalla geometria: almeno due righe di blocchi affiancati con lo stesso bordo superiore
@@ -228,12 +406,12 @@ static class PdfToWord
         return new TableBlocks(blocks.Where(members.Contains).ToList(), cells, lefts, right);
     }
 
-    static Table ToTable(TableBlocks table, double body)
+    static Table ToTable(TableBlocks table, double body, List<PdfRectangle> bullets)
     {
         var edges = table.Lefts.Append(table.Right + 6).ToArray();
         var widths = edges.Zip(edges.Skip(1), (a, b) => b - a).ToArray();
         var rows = table.Rows.Select(r => r.Select(cell => cell.OrderByDescending(b => b.BoundingBox.Top)
-            .SelectMany(b => ToParagraphs(b, body)).ToList()).ToList()).ToList();
+            .SelectMany(b => ToParagraphs(b, body, bullets)).ToList()).ToList()).ToList();
         return new Table(rows, widths);
     }
 
@@ -261,6 +439,8 @@ static class PdfToWord
         {
             body.Append("<w:p>");
             if (heading > 0) body.Append($"<w:pPr><w:pStyle w:val=\"Heading{heading}\"/></w:pPr>");
+            else if (p.List > 0) body.Append($"<w:pPr><w:pStyle w:val=\"ListBullet\"/><w:numPr><w:ilvl w:val=\"0\"/><w:numId w:val=\"{p.List}\"/></w:numPr>" +
+                                           (inCell ? "<w:spacing w:after=\"0\"/>" : "") + "</w:pPr>");
             else if (inCell) body.Append("<w:pPr><w:spacing w:after=\"0\"/></w:pPr>");
             foreach (var run in p.Runs)
             {
@@ -322,6 +502,7 @@ static class PdfToWord
             <Default Extension="jpeg" ContentType="image/jpeg"/>
             <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
             <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+            <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
             </Types>
             """);
         Entry("_rels/.rels", """
@@ -333,9 +514,11 @@ static class PdfToWord
         Entry("word/_rels/document.xml.rels",
             """<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">""" +
             """<Relationship Id="rStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>""" +
+            """<Relationship Id="rNumbering" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>""" +
             string.Concat(pictures.Select((p, i) => $"""<Relationship Id="rImg{i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image{i + 1}.{p.Extension}"/>""")) +
             "</Relationships>");
         Entry("word/styles.xml", Styles);
+        Entry("word/numbering.xml", Numbering);
         Entry("word/document.xml",
             """<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" """ +
             """xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" """ +
@@ -367,6 +550,20 @@ static class PdfToWord
         <w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:spacing w:before="360" w:after="120"/><w:outlineLvl w:val="0"/></w:pPr><w:rPr><w:b/><w:sz w:val="36"/></w:rPr></w:style>
         <w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:spacing w:before="240" w:after="80"/><w:outlineLvl w:val="1"/></w:pPr><w:rPr><w:b/><w:sz w:val="28"/></w:rPr></w:style>
         <w:style w:type="paragraph" w:styleId="Heading3"><w:name w:val="heading 3"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:spacing w:before="200" w:after="60"/><w:outlineLvl w:val="2"/></w:pPr><w:rPr><w:b/><w:sz w:val="24"/></w:rPr></w:style>
+        <w:style w:type="paragraph" w:styleId="ListBullet"><w:name w:val="List Bullet"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:after="80"/></w:pPr></w:style>
         </w:styles>
+        """;
+
+    // elenco puntato (1) ed elenco di caselle da spuntare (2)
+    const string Numbering = """
+        <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:abstractNum w:abstractNumId="0"><w:multiLevelType w:val="singleLevel"/><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="bullet"/><w:lvlText w:val="•"/><w:lvlJc w:val="left"/>
+        <w:pPr><w:ind w:left="360" w:hanging="360"/></w:pPr><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr></w:lvl></w:abstractNum>
+        <w:abstractNum w:abstractNumId="1"><w:multiLevelType w:val="singleLevel"/><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="bullet"/><w:lvlText w:val="☐"/><w:lvlJc w:val="left"/>
+        <w:pPr><w:ind w:left="360" w:hanging="360"/></w:pPr><w:rPr><w:rFonts w:ascii="Segoe UI Symbol" w:hAnsi="Segoe UI Symbol"/></w:rPr></w:lvl></w:abstractNum>
+        <w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>
+        <w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num>
+        </w:numbering>
         """;
 }

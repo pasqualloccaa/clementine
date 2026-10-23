@@ -68,7 +68,7 @@ public class LibreOfficeEngineTests
         if (Soffice is null) return;
         using var dir = new TempDir();
         var sentence = "Questa frase serve a riempire più righe del paragrafo di prova. ";
-        var md = dir.File("relazione.md", $"# Relazione annuale\n\n{string.Concat(Enumerable.Repeat(sentence, 8))}\n\nSecondo paragrafo breve.\n\n| Mese | Totale |\n|---|---|\n| Gennaio | 120 |\n| Febbraio | 95 |\n");
+        var md = dir.File("relazione.md", $"# Relazione annuale\n\n{string.Concat(Enumerable.Repeat(sentence, 8))}\n\nSecondo paragrafo breve.\n\n- prima voce\n- seconda voce\n\n| Mese | Totale |\n|---|---|\n| Gennaio | 120 |\n| Febbraio | 95 |\n");
         var pdf = await Convert(dir, await Convert(dir, md, "docx", "relazione.docx"), "pdf", "relazione.pdf");
         var word = Path.Combine(dir.Path, "da-pdf.docx");
 
@@ -87,6 +87,7 @@ public class LibreOfficeEngineTests
         var cells = System.Xml.Linq.XDocument.Parse(xml).Descendants().Where(e => e.Name.LocalName == "tc")
             .Select(tc => string.Concat(tc.Descendants().Where(e => e.Name.LocalName == "t").Select(t => t.Value))).ToArray();
         Assert.Equal(["Mese", "Totale", "Gennaio", "120", "Febbraio", "95"], cells);
+        Assert.Equal([("ListBullet", "prima voce"), ("ListBullet", "seconda voce")], paragraphs.Where(p => p.Style == "ListBullet"));
 
         var back = await Convert(dir, word, "pdf", "riaperto.pdf");
         using var doc = DocLib.Instance.GetDocReader(back, new PageDimensions(1));
