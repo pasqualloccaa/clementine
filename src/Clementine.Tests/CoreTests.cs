@@ -99,15 +99,17 @@ public class OutputPathTests
         Assert.Equal(System.IO.Path.Combine(@"C:\x", expected), OutputPath.Next(System.IO.Path.Combine(@"C:\x", input), ext, suffix));
 }
 
+/// <summary>Motore di prova per la coda: fa quello che gli si passa.</summary>
+sealed class FakeEngine(Func<Job, CancellationToken, Task> run) : IEngine
+{
+    public FakeEngine(Func<Job, Task> run) : this((job, _) => run(job)) { }
+    public bool CanHandle(Operation op) => true;
+    public Task RunAsync(Job job, IProgress<double> progress, CancellationToken ct) => run(job, ct);
+}
+
 public class PipelineTests
 {
     static readonly Operation ToJpg = new("convert:jpg", "JPG", FileKind.Image, "jpg");
-
-    sealed class FakeEngine(Func<Job, Task> run) : IEngine
-    {
-        public bool CanHandle(Operation op) => true;
-        public Task RunAsync(Job job, IProgress<double> progress, CancellationToken ct) => run(job);
-    }
 
     static Task<BatchResult> RunAsync(IEngine engine, params string[] inputs) => RunAsync(engine, ToJpg, inputs);
 

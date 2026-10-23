@@ -105,12 +105,6 @@ public class FileOpsTests
 
 public class PipelineQueueTests
 {
-    sealed class FakeEngine(Func<Job, CancellationToken, Task> run) : IEngine
-    {
-        public bool CanHandle(Operation op) => true;
-        public Task RunAsync(Job job, IProgress<double> progress, CancellationToken ct) => run(job, ct);
-    }
-
     static readonly Operation ToJpg = new("convert:jpg", "JPG", FileKind.Image, "jpg");
 
     [Fact]
@@ -129,6 +123,43 @@ public class PipelineQueueTests
 
         Assert.Equal([a, b], seen);
         Assert.Equal(Path.Combine(dir.Path, "a (unito).pdf"), Assert.Single(result.Outputs));
+    }
+
+    sealed class FakeBatchEngine(Func<IReadOnlyList<Job>, Task> run) : IBatchEngine
+    {
+        public int Calls;
+        public bool CanHandle(Operation op) => true;
+        public Task RunAsync(Job job, IProgress<double> progress, CancellationToken ct) => RunAsync([job], progress, ct);
+        public Task RunAsync(IReadOnlyList<Job> jobs, IProgress<double> progress, CancellationToken ct)
+        {
+            Calls++;
+            return run(jobs);
+        }
+    }
+
+    [Fact]
+    public async Task BatchEngine_OneCallForAllFiles_FailuresStayPerFile()
+    {
+        using var dir = new TempDir();
+        var a = dir.File("a.docx");
+        var bad = dir.File("rotto.docx");
+        var c = dir.File("c.docx");
+        var engine = new FakeBatchEngine(async jobs =>
+        {
+            foreach (var job in jobs.Where(j => j.Input != bad)) await File.WriteAllTextAsync(job.Output, "pdf");
+            throw new InvalidOperationException("rotto.docx illeggibile");
+        });
+        using var pipeline = new Pipeline([engine]);
+        var done = new TaskCompletionSource<BatchResult>();
+        pipeline.Completed += done.SetResult;
+
+        pipeline.Enqueue([a, bad, c], new Operation("convert:pdf", "PDF", FileKind.Document, "pdf"));
+        var result = await done.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(1, engine.Calls);
+        Assert.Equal([a, c], result.Sources);
+        Assert.Contains("illeggibile", Assert.Single(result.Errors));
+        Assert.Equal(["a.docx", "a.pdf", "c.docx", "c.pdf", "rotto.docx"], Directory.GetFiles(dir.Path).Select(Path.GetFileName).Order());
     }
 
     [Fact]

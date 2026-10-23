@@ -27,3 +27,12 @@ public interface IEngine
     bool CanHandle(Operation op);
     Task RunAsync(Job job, IProgress<double> progress, CancellationToken ct);
 }
+
+/// <summary>
+/// Motore che converte più file in un colpo solo (LibreOffice: un avvio invece di uno per file, 6 file 22 s → 4 s).
+/// Un job senza file prodotto all'uscita conta come non riuscito; gli altri vengono salvati comunque.
+/// </summary>
+public interface IBatchEngine : IEngine
+{
+    Task RunAsync(IReadOnlyList<Job> jobs, IProgress<double> progress, CancellationToken ct);
+}

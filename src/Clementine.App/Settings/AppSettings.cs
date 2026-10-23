@@ -35,6 +35,9 @@ public sealed class AppSettings
     public void Save()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
-        File.WriteAllText(FilePath, JsonSerializer.Serialize(this));
+        // prima un file a parte, poi lo scambio: un'interruzione a metà scrittura non tronca le impostazioni
+        var temp = FilePath + ".tmp";
+        File.WriteAllText(temp, JsonSerializer.Serialize(this));
+        File.Move(temp, FilePath, overwrite: true);
     }
 }

@@ -116,6 +116,8 @@ public sealed class Pipeline : IDisposable
     {
         Started?.Invoke(batch);
         var engine = _engines.FirstOrDefault(e => e.CanHandle(batch.Op));
+        if (engine is IBatchEngine many && !batch.Op.Combines && batch.Inputs.Count > 1)
+            return await RunManyAsync(many, batch, ct);
         // un'operazione che unisce è un solo lavoro con tutti i file; il nome viene dal primo
         var items = batch.Op.Combines ? [batch.Inputs[0]] : batch.Inputs;
         var outputs = new List<string>();
@@ -145,37 +147,83 @@ public sealed class Pipeline : IDisposable
         return new BatchResult(batch, outputs, errors, sources);
     }
 
+    // Tutti i file del batch in una sola chiamata al motore; ognuno poi si pubblica (o fallisce) per conto suo.
+    async Task<BatchResult> RunManyAsync(IBatchEngine engine, Batch batch, CancellationToken ct)
+    {
+        var jobs = batch.Inputs.Select(input => new Job(input, batch.Op, TempPath(input, batch.Op))).ToList();
+        var outputs = new List<string>();
+        var sources = new List<string>();
+        var errors = new List<string>();
+        try
+        {
+            string? failure = null;
+            try { await engine.RunAsync(jobs, new InlineProgress(p => Progress?.Invoke(batch, p)), ct); }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                _cts.Token.ThrowIfCancellationRequested(); // chiusura dell'app: si esce dal worker
+                return new BatchResult(batch, [], [], [], Cancelled: true);
+            }
+            catch (Exception e) { failure = e.Message; }
+
+            foreach (var job in jobs)
+            {
+                try
+                {
+                    if (!File.Exists(job.Output) && !Directory.Exists(job.Output))
+                        throw new InvalidOperationException(failure ?? "nessun file prodotto");
+                    outputs.Add(Publish(job.Input, job.Op, job.Output));
+                    sources.Add(job.Input);
+                }
+                catch (Exception e) { errors.Add($"{Path.GetFileName(job.Input)}: {e.Message}"); }
+            }
+        }
+        finally { foreach (var job in jobs) Discard(job.Output); }
+        return new BatchResult(batch, outputs, errors, sources);
+    }
+
     // Il motore scrive su un file (o una cartella) temporaneo accanto all'originale; solo a lavoro finito lo si
     // rinomina senza sovrascrivere nulla. Così un errore non lascia file a metà e l'originale non viene mai toccato.
     static async Task<string> RunAsync(IEngine engine, string input, Operation op, IReadOnlyList<string>? inputs,
         IProgress<double> progress, CancellationToken ct)
     {
-        var extension = op.TargetExtension ?? Path.GetExtension(input).TrimStart('.');
-        var temp = Path.Combine(Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(input))!,
-            $"~{Path.GetFileNameWithoutExtension(input)}.{Guid.NewGuid().ToString("N")[..8]}.{extension}");
+        var temp = TempPath(input, op);
         try
         {
             await engine.RunAsync(new Job(input, op, temp, inputs), progress, ct);
             ct.ThrowIfCancellationRequested(); // i motori sincroni possono finire anche se annullati
-            var isFolder = Directory.Exists(temp);
-            while (true)
-            {
-                var output = isFolder ? OutputPath.Next(input, null, op.Suffix ?? op.Label) : OutputPath.Next(input, extension, op.Suffix);
-                try
-                {
-                    if (isFolder) Directory.Move(temp, output);
-                    else File.Move(temp, output, overwrite: false);
-                    return output;
-                }
-                // creato da qualcun altro nel frattempo: nome successivo
-                catch (IOException) when (File.Exists(output) || Directory.Exists(output)) { }
-            }
+            return Publish(input, op, temp);
         }
-        finally
+        finally { Discard(temp); }
+    }
+
+    static string Extension(string input, Operation op) => op.TargetExtension ?? Path.GetExtension(input).TrimStart('.');
+
+    static string TempPath(string input, Operation op) =>
+        Path.Combine(Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(input))!,
+            $"~{Path.GetFileNameWithoutExtension(input)}.{Guid.NewGuid().ToString("N")[..8]}.{Extension(input, op)}");
+
+    // dal nome temporaneo al primo nome libero, senza sovrascrivere nulla
+    static string Publish(string input, Operation op, string temp)
+    {
+        var isFolder = Directory.Exists(temp);
+        while (true)
         {
-            if (Directory.Exists(temp)) Directory.Delete(temp, recursive: true);
-            else File.Delete(temp);
+            var output = isFolder ? OutputPath.Next(input, null, op.Suffix ?? op.Label) : OutputPath.Next(input, Extension(input, op), op.Suffix);
+            try
+            {
+                if (isFolder) Directory.Move(temp, output);
+                else File.Move(temp, output, overwrite: false);
+                return output;
+            }
+            // creato da qualcun altro nel frattempo: nome successivo
+            catch (IOException) when (File.Exists(output) || Directory.Exists(output)) { }
         }
+    }
+
+    static void Discard(string temp)
+    {
+        if (Directory.Exists(temp)) Directory.Delete(temp, recursive: true);
+        else File.Delete(temp);
     }
 
     sealed class InlineProgress(Action<double> report) : IProgress<double>

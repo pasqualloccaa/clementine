@@ -134,9 +134,6 @@ public partial class App : Application
         _external.Clear();
     }
 
-    IReadOnlyList<Operation> OperationsFor(IReadOnlyList<string> files) =>
-        Formats.ConversionsFor(files).Where(_pipeline!.CanRun).ToList();
-
     // anelli Converti e Strumenti solo con le operazioni che un motore sa fare (es. niente HEIC senza encoder)
     IReadOnlyList<Operation>[] RingsFor(IReadOnlyList<string> files) =>
         Toolbox.RingsFor(files).Select(ops => (IReadOnlyList<Operation>)ops.Where(op => Toolbox.IsAction(op) || _pipeline!.CanRun(op)).ToList()).ToArray();
@@ -183,7 +180,7 @@ public partial class App : Application
     {
         var files = Forms.Clipboard.ContainsFileDropList() ? Forms.Clipboard.GetFileDropList().Cast<string>().ToArray() : null;
         var isImage = files is null && Forms.Clipboard.ContainsImage();
-        var ops = files is not null ? OperationsFor(files) : isImage ? OperationsFor(["appunti.png"]) : [];
+        var ops = files is not null ? RingsFor(files)[(int)Ring.Convert] : isImage ? RingsFor(["appunti.png"])[(int)Ring.Convert] : [];
         if (ops.Count == 0) return null;
 
         var menu = new Forms.ToolStripMenuItem("Converti dagli appunti");

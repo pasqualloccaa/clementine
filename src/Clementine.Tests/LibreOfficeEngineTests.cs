@@ -60,6 +60,29 @@ public class LibreOfficeEngineTests
         Assert.True(new FileInfo(png).Length > 0);
     }
 
+    [Fact]
+    public async Task Batch_SameNameFiles_DoNotOverwriteEachOther()
+    {
+        if (Soffice is null) return;
+        using var dir = new TempDir();
+        var txt = dir.File("relazione.txt", "dal testo");
+        var md = dir.File("relazione.md", "dal markdown");
+        var other = dir.File("altro.txt", "terzo");
+        var op = Op(txt, "pdf");
+        Job JobFor(string input, string name) => new(input, op, Path.Combine(dir.Path, name));
+        var jobs = new[] { JobFor(txt, "1.pdf"), JobFor(md, "2.pdf"), JobFor(other, "3.pdf") };
+
+        await new LibreOfficeEngine(Soffice).RunAsync(jobs, NoProgress, default);
+
+        foreach (var (job, expected) in jobs.Zip(new[] { "dal testo", "dal markdown", "terzo" }))
+        {
+            using var doc = DocLib.Instance.GetDocReader(job.Output, new PageDimensions(1));
+            using var page = doc.GetPageReader(0);
+            Assert.Contains(expected, page.GetText());
+        }
+        Assert.Equal(6, Directory.GetFileSystemEntries(dir.Path).Length); // 3 originali + 3 PDF, nessuna cartella di lavoro
+    }
+
     // LibreOffice esce con 0 anche quando non produce nulla (qui: file sparito prima della conversione)
     [Fact]
     public async Task NothingProduced_FailsWithMessage_AndLeavesNothing()
