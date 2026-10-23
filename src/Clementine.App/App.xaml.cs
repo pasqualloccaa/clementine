@@ -6,7 +6,6 @@ using Clementine.App.Island;
 using Clementine.App.Notifications;
 using Clementine.App.Settings;
 using Clementine.App.Shell;
-using System.Windows.Interop;
 using Clementine.App.Tray;
 using Clementine.Core;
 using Clementine.Engines;
@@ -29,7 +28,7 @@ public partial class App : Application
             .WriteTo.File(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Clementine", "logs", "clementine-.log"),
                 rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14)
             .CreateLogger();
-        JobToasts.Init(id => _pipeline?.Cancel(id));
+        JobToasts.Init(id => _pipeline?.Cancel(id), id => Dispatcher.BeginInvoke(() => FileActions.ShareFromToastAsync(id)));
 
         var tools = Path.Combine(AppContext.BaseDirectory, "tools");
         var exiftool = Path.Combine(tools, "exiftool", "exiftool.exe");
@@ -45,7 +44,7 @@ public partial class App : Application
         {
             Console.WriteLine($"[Drop] {op.Label}: {string.Join(", ", files)}");
             if (Toolbox.IsAction(op))
-                Dispatcher.BeginInvoke(() => FileActions.RunAsync(op, files, new WindowInteropHelper(island).Handle));
+                Dispatcher.BeginInvoke(() => FileActions.RunAsync(op, files));
             else Enqueue(files, op);
         };
         _pipeline.Started += batch =>

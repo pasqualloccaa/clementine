@@ -1,4 +1,8 @@
+using System.Collections.Concurrent;
 using System.ComponentModel;
+using System.Windows;
+using System.Windows.Interop;
+using System.Windows.Media;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -14,8 +18,10 @@ namespace Clementine.App.Shell;
 /// <summary>Le azioni dell'anello Alt: lavorano sui file così come sono, senza passare dalla coda.</summary>
 static class FileActions
 {
+    static readonly ConcurrentDictionary<string, string[]> PendingShares = new();
+
     /// <summary>Va chiamata dopo la fine del drop: un dialogo aperto dentro Drop bloccherebbe Esplora file.</summary>
-    public static async Task RunAsync(Operation op, string[] paths, IntPtr window)
+    public static async Task RunAsync(Operation op, string[] paths)
     {
         try
         {
@@ -43,7 +49,11 @@ static class FileActions
                     break;
 
                 case "action:share":
-                    await ShareAsync(paths, window);
+                    // Windows apre Condividi solo per l'app in primo piano, e dopo un drop lo è Esplora file:
+                    // si passa da una notifica, il cui clic porta Clementine in primo piano (→ ShareFromToastAsync)
+                    var id = Guid.NewGuid().ToString("N");
+                    PendingShares[id] = paths;
+                    JobToasts.ShareReady(id, paths.Length == 1 ? Path.GetFileName(paths[0]) : $"{paths.Length} file");
                     break;
 
                 case "action:new-folder":
@@ -61,12 +71,37 @@ static class FileActions
         }
     }
 
+    /// <summary>Dal clic sulla notifica "Pronto per condividere" (thread della UI).</summary>
+    public static async Task ShareFromToastAsync(string id)
+    {
+        if (!PendingShares.TryRemove(id, out var paths)) return;
+        try { await ShareAsync(paths); }
+        catch (Exception e)
+        {
+            Log.Error(e, "Condividi fallito su {Paths}", paths);
+            JobToasts.Info("Condividi: non riuscito", e.Message);
+        }
+    }
+
     // Finestra "Condividi" di Windows (Nearby Share, mail, app…), agganciata a una finestra desktop tramite interop.
-    static async Task ShareAsync(string[] paths, IntPtr window)
+    static async Task ShareAsync(string[] paths)
     {
         var items = new List<IStorageItem>();
         foreach (var p in paths)
             items.Add(Directory.Exists(p) ? await StorageFolder.GetFolderFromPathAsync(p) : await StorageFile.GetFileFromPathAsync(p));
+
+        // finestra d'appoggio invisibile e attivabile: l'isola (WS_EX_NOACTIVATE) non può andare in primo piano
+        var work = SystemParameters.WorkArea;
+        var host = new Window
+        {
+            Width = 1, Height = 1, WindowStyle = WindowStyle.None, AllowsTransparency = true, Background = Brushes.Transparent,
+            ShowInTaskbar = false, Topmost = true, Left = work.Left + work.Width / 2, Top = work.Top + work.Height / 2,
+        };
+        host.Show();
+        host.Activate();
+        var window = new WindowInteropHelper(host).Handle;
+        // chiuderla subito potrebbe chiudere anche la finestra Condividi: resta qualche minuto, invisibile
+        _ = Task.Delay(TimeSpan.FromMinutes(3)).ContinueWith(_ => host.Dispatcher.Invoke(host.Close));
 
         var interop = DataTransferManager.As<IDataTransferManagerInterop>();
         var iid = new Guid("a5caee9b-8708-49d1-8d36-67d25a8da00c"); // IID di DataTransferManager

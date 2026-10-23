@@ -9,12 +9,22 @@ namespace Clementine.App.Notifications;
 /// <summary>Un toast per batch (tag = id del batch): progresso con "Annulla" mentre lavora, poi esito con "Mostra in cartella".</summary>
 static class JobToasts
 {
-    public static void Init(Action<int> cancel) => ToastNotificationManagerCompat.OnActivated += e =>
+    public static void Init(Action<int> cancel, Action<string> share) => ToastNotificationManagerCompat.OnActivated += e =>
     {
         var args = ToastArguments.Parse(e.Argument);
         if (args.TryGetValue("select", out var path)) Process.Start("explorer.exe", $"/select,\"{path}\"");
         if (args.TryGetValue("cancel", out var id) && int.TryParse(id, CultureInfo.InvariantCulture, out var batchId)) cancel(batchId);
+        if (args.TryGetValue("share", out var shareId)) share(shareId);
     };
+
+    /// <summary>Secondo passo di "Condividi": il clic (sulla notifica o sul pulsante) porta Clementine in primo piano.</summary>
+    public static void ShareReady(string id, string what) =>
+        new ToastContentBuilder()
+            .AddText("Pronto per condividere")
+            .AddText($"{what}: clicca qui per aprire Condividi")
+            .AddArgument("share", id)
+            .AddButton(new ToastButton().SetContent("Condividi").AddArgument("share", id))
+            .Show();
 
     // Un toast cliccato ad app chiusa la rilancerebbe con un'isola nuova: meglio non lasciarne in giro.
     public static void Cleanup() => ToastNotificationManagerCompat.History.Clear();
