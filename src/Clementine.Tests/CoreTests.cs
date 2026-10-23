@@ -20,7 +20,7 @@ public class FormatsTests
     static string[] Targets(params string[] files) => Formats.ConversionsFor(files).Select(o => o.TargetExtension!).ToArray();
 
     [Fact]
-    public void Pdf_OffersDocumentsTextAndImages() => Assert.Equal(["docx", "pptx", "epub", "txt", "md", "jpg", "png"], Targets("doc.PDF"));
+    public void Pdf_OffersDocumentsTextAndImages() => Assert.Equal(["docx", "txt", "md", "jpg", "png"], Targets("doc.PDF"));
 
     [Fact]
     public void OfficeKinds()

@@ -26,7 +26,7 @@ public class LibreOfficeEngineTests
     {
         var engine = new LibreOfficeEngine(null);
         Assert.False(engine.CanHandle(Op("a.docx", "pdf")));
-        Assert.False(new PdfiumEngine().CanHandle(Op("a.pdf", "docx"))); // e il motore PDF non se ne prende carico al suo posto
+        Assert.True(new PdfiumEngine().CanHandle(Op("a.pdf", "docx"))); // PDF → Word non dipende da LibreOffice
     }
 
     [Fact]
@@ -54,10 +54,44 @@ public class LibreOfficeEngineTests
         var sheetPdf = await Convert(dir, xlsx, "pdf", "largo.pdf");
         using (var doc = DocLib.Instance.GetDocReader(sheetPdf, new PageDimensions(1))) Assert.Equal(1, doc.GetPageCount());
 
-        // PDF → presentazione → una slide come PNG (passando dal PDF)
-        var pptx = await Convert(dir, pdf, "pptx", "nota.pptx");
-        var png = await Convert(dir, pptx, "png", "slide.png");
+        // presentazione → una slide come PNG (passando dal PDF); la presentazione la fa LibreOffice stesso dal PDF
+        await ProcessRunner.RunAsync(Soffice, ["--headless", "--infilter=impress_pdf_import", "--convert-to", "pptx", "--outdir", dir.Path, pdf], null, default);
+        var png = await Convert(dir, Path.Combine(dir.Path, "nota.pptx"), "png", "slide.png");
         Assert.True(new FileInfo(png).Length > 0);
+    }
+
+    // PDF vero (da LibreOffice) → Word: il titolo torna titolo, le righe di un paragrafo tornano un paragrafo solo,
+    // e il .docx scritto a mano si riapre senza errori
+    [Fact]
+    public async Task PdfToWord_RebuildsHeadingsAndParagraphs()
+    {
+        if (Soffice is null) return;
+        using var dir = new TempDir();
+        var sentence = "Questa frase serve a riempire più righe del paragrafo di prova. ";
+        var md = dir.File("relazione.md", $"# Relazione annuale\n\n{string.Concat(Enumerable.Repeat(sentence, 8))}\n\nSecondo paragrafo breve.\n\n| Mese | Totale |\n|---|---|\n| Gennaio | 120 |\n| Febbraio | 95 |\n");
+        var pdf = await Convert(dir, await Convert(dir, md, "docx", "relazione.docx"), "pdf", "relazione.pdf");
+        var word = Path.Combine(dir.Path, "da-pdf.docx");
+
+        await new PdfiumEngine().RunAsync(new Job(pdf, Op(pdf, "docx"), word), NoProgress, default);
+
+        string xml;
+        using (var zip = System.IO.Compression.ZipFile.OpenRead(word))
+        using (var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open())) xml = reader.ReadToEnd();
+        var paragraphs = System.Xml.Linq.XDocument.Parse(xml).Descendants().Where(e => e.Name.LocalName == "p")
+            .Select(p => (Style: p.Descendants().FirstOrDefault(e => e.Name.LocalName == "pStyle")?.Attributes().First().Value,
+                          Text: string.Concat(p.Descendants().Where(e => e.Name.LocalName == "t").Select(t => t.Value))))
+            .ToList();
+        Assert.Equal(("Heading1", "Relazione annuale"), paragraphs[0]);
+        Assert.Equal(string.Concat(Enumerable.Repeat(sentence, 8)).Trim(), paragraphs[1].Text);
+        Assert.Equal("Secondo paragrafo breve.", paragraphs[2].Text);
+        var cells = System.Xml.Linq.XDocument.Parse(xml).Descendants().Where(e => e.Name.LocalName == "tc")
+            .Select(tc => string.Concat(tc.Descendants().Where(e => e.Name.LocalName == "t").Select(t => t.Value))).ToArray();
+        Assert.Equal(["Mese", "Totale", "Gennaio", "120", "Febbraio", "95"], cells);
+
+        var back = await Convert(dir, word, "pdf", "riaperto.pdf");
+        using var doc = DocLib.Instance.GetDocReader(back, new PageDimensions(1));
+        using var page = doc.GetPageReader(0);
+        Assert.Contains("Relazione annuale", page.GetText());
     }
 
     [Fact]

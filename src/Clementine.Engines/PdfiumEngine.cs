@@ -9,18 +9,20 @@ namespace Clementine.Engines;
 
 /// <summary>
 /// PDF → testo o immagini a 300 dpi, con PDFium (Docnet). Più pagine → una cartella con un'immagine per pagina.
+/// PDF → Word con PdfPig (vedi <see cref="PdfToWord"/>).
 /// Unisci e dividi con PdfPig, che copia le pagine così come sono.
 /// </summary>
 public sealed class PdfiumEngine : IEngine
 {
     const double Dpi = 300;
 
-    public bool CanHandle(Operation op) => op.Kind == FileKind.Pdf && !LibreOfficeEngine.HandlesPdfTo(op.TargetExtension);
+    public bool CanHandle(Operation op) => op.Kind == FileKind.Pdf;
 
     public Task RunAsync(Job job, IProgress<double> progress, CancellationToken ct)
     {
         if (job.Op.Id == Toolbox.MergePdf.Id) Merge(job, progress, ct);
         else if (job.Op.Id == "tool:split-pdf") Split(job, progress, ct);
+        else if (job.Op.TargetExtension == "docx") PdfToWord.Convert(job.Input, job.Output, progress, ct);
         else Render(job, progress, ct);
         return Task.CompletedTask;
     }

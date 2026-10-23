@@ -79,7 +79,7 @@ Clementine/
 │   ├── Clementine.Engines/      # adapter verso i motori esterni
 │   │   ├── FfmpegEngine.cs      # audio/video/gif
 │   │   ├── MagickEngine.cs      # immagini (Magick.NET); HEIC in scrittura via encoder WinRT di Windows
-│   │   ├── PdfiumEngine.cs      # PDF → immagini/testo (PDFium), merge/split (PdfPig)
+│   │   ├── PdfiumEngine.cs      # PDF → immagini/testo (PDFium), merge/split e PDF → Word (PdfPig)
 │   │   ├── LibreOfficeEngine.cs # docx/pptx/xlsx/pages/epub ↔ pdf (soffice --headless)
 │   │   ├── ArchiveEngine.cs     # zip/tar/gz (SharpCompress), rar solo in lettura
 │   │   └── MetadataEngine.cs    # ExifTool
@@ -107,6 +107,8 @@ Clementine/
   (`PERL_HASH_SEED=0`, impostato in `ProcessRunner`): senza, fallisce a caso (~60%).
 - PDF: rendering e testo con PDFium (Docnet.Core); PDF a più pagine → cartella "nome (PNG)" con un'immagine per pagina.
 - Niente PDFsharp: dalla 6.5 è AGPL e chiede una chiave di licenza. Unisci/dividi con PdfPig (Apache 2.0).
+- PDF → Word: `PdfToWord` ricostruisce paragrafi, titoli, tabelle e immagini con l'analisi di layout di PdfPig e scrive il .docx a mano.
+  L'importazione PDF di LibreOffice fa caselle di testo: per questo PDF → pptx/epub sono stati tolti. Disegni vettoriali e OCR non gestiti.
 - Strumenti senza parametri (M4); quelli che chiedono un editor o valori (ritaglia, annota, trim, velocità…)
   sono rimandati: vedi il commento `shortcut:` in `Toolbox.cs`.
 
@@ -116,7 +118,7 @@ Clementine/
 | Immagini | jpg png webp heic tiff avif bmp svg gif | jpg png webp heic tiff avif bmp |
 | Audio | mp3 m4a wav flac ogg opus aiff wma | stessi |
 | Video | mp4 mov mkv webm avi wmv gif | stessi + gif |
-| PDF | pdf | docx pptx xlsx epub txt md jpg/png 300 dpi |
+| PDF | pdf | docx txt md jpg/png 300 dpi |
 | Documenti | docx odt txt md epub (pages: via LibreOffice se supportato) | docx pdf txt md epub |
 | Presentazioni | pptx odp | pdf jpg/png per slide |
 | Fogli | xlsx ods csv tsv | xlsx ods csv tsv pdf |

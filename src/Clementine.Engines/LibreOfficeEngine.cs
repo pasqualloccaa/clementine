@@ -4,12 +4,10 @@ namespace Clementine.Engines;
 
 /// <summary>
 /// Documenti, presentazioni e fogli con LibreOffice in modalità headless (opzionale: si usa solo se trovato).
-/// Anche PDF → docx/pptx/epub, con i filtri di importazione PDF di LibreOffice.
+/// Niente PDF in ingresso: l'importazione PDF di LibreOffice fa caselle di testo, PDF → Word lo fa <see cref="PdfToWord"/>.
 /// </summary>
 public sealed class LibreOfficeEngine(string? soffice) : IBatchEngine
 {
-    static readonly string[] FromPdf = ["docx", "pptx", "epub"];
-
     /// <summary>soffice.com nelle posizioni note (installazione classica o estrazione in Documenti), oppure null.</summary>
     public static string? Find() => new[]
     {
@@ -19,10 +17,8 @@ public sealed class LibreOfficeEngine(string? soffice) : IBatchEngine
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "LibreOffice"),
     }.Select(dir => Path.Combine(dir, "program", "soffice.com")).FirstOrDefault(File.Exists);
 
-    public static bool HandlesPdfTo(string? target) => FromPdf.Contains(target);
-
     public bool CanHandle(Operation op) => soffice is not null && op.Id.StartsWith("convert:") &&
-        (op.Kind is FileKind.Document or FileKind.Presentation or FileKind.Spreadsheet || op.Kind == FileKind.Pdf && HandlesPdfTo(op.TargetExtension));
+        op.Kind is FileKind.Document or FileKind.Presentation or FileKind.Spreadsheet;
 
     public async Task RunAsync(Job job, IProgress<double> progress, CancellationToken ct)
     {
@@ -85,10 +81,7 @@ public sealed class LibreOfficeEngine(string? soffice) : IBatchEngine
         return done;
     }
 
-    static string? InputFilter(Job job) =>
-        Formats.Extension(job.Input) == "tsv" ? "Text - txt - csv (StarCalc):9,34,76,1"
-        : job.Op.Kind == FileKind.Pdf ? (job.Op.TargetExtension == "pptx" ? "impress_pdf_import" : "writer_pdf_import")
-        : null;
+    static string? InputFilter(Job job) => Formats.Extension(job.Input) == "tsv" ? "Text - txt - csv (StarCalc):9,34,76,1" : null;
 
     static string Filter(string target, FileKind? kind) => target switch
     {
