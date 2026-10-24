@@ -142,6 +142,9 @@ Copia in…, Sposta in…, Copia percorso, Apri terminale qui, Condividi (Nearby
 - Ogni engine implementa `IEngine { bool CanHandle(Operation); Task RunAsync(Job, IProgress<double>, CancellationToken); }`.
 - Niente servizi cloud, niente API a pagamento, niente telemetria.
 - I binari esterni stanno in `tools/` e vengono scaricati da `tools/get-tools.ps1` (ffmpeg, exiftool); LibreOffice è opzionale e rilevato se installato.
+- Installer: `installer/build.ps1` (publish autonomo win-x64 + Inno Setup 6) → `.build/installer/Clementine-Setup.exe`.
+  Per utente, senza admin, in `%LOCALAPPDATA%\Programs\Clementine`. Aggiornamento e disinstallazione chiudono l'app con
+  `--quit` / `--unregister` (Windows non sa chiudere da sé un'app senza finestre normali).
 - Log in `%APPDATA%\Clementine\logs\` con Serilog.
 - UI in italiano e inglese (resx).
 

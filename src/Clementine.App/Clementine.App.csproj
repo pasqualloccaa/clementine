@@ -5,6 +5,8 @@
     <!-- 10.0.17763: toast di Windows e encoder HEIF -->
     <TargetFramework>net8.0-windows10.0.17763.0</TargetFramework>
     <Nullable>enable</Nullable>
+    <!-- solo le traduzioni dei messaggi di sistema che servono: niente cartelle de, ja, zh-Hans… nell'installer -->
+    <SatelliteResourceLanguages>it;en</SatelliteResourceLanguages>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <!-- solo per NotifyIcon (tray) e Screen (aree di lavoro multi-monitor) -->

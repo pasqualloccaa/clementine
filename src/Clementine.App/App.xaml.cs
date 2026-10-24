@@ -30,10 +30,16 @@ public partial class App : Application
     {
         base.OnStartup(e);
         AttachConsole(-1); // WinExe: fa arrivare Console.WriteLine al terminale da cui è stata lanciata
-        if (e.Args is ["--unregister"]) // per la disinstallazione: niente resta nel registro
+        if (e.Args is ["--quit"] or ["--unregister"]) // per installer e disinstallazione
         {
-            ContextMenu.Unregister(Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Classes"));
-            using (var run = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(Autostart.RunKey)) Autostart.Set(run, Environment.ProcessPath!, false);
+            // prima si chiude quella aperta: appena avviata potrebbe riscrivere il menu dopo che l'abbiamo tolto
+            SingleInstance.Quit(SingleInstance.DefaultName);
+            if (e.Args[0] == "--unregister") // niente resta nel registro
+            {
+                ContextMenu.Unregister(Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Classes"));
+                using var run = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(Autostart.RunKey);
+                Autostart.Set(run, Environment.ProcessPath!, false);
+            }
             Shutdown();
             return;
         }
@@ -97,7 +103,11 @@ public partial class App : Application
 
         SetExplorerMenu(_settings.ExplorerMenu);
         _externalTimer.Tick += (_, _) => RunExternal();
-        _instance.Listen(r => Dispatcher.BeginInvoke(() => AddExternal(r)));
+        _instance.Listen(r => Dispatcher.BeginInvoke(() =>
+        {
+            if (r.Op == SingleInstance.QuitOp) Shutdown();
+            else AddExternal(r);
+        }));
         if (request is not null) AddExternal(request);
     }
 

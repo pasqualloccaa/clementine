@@ -64,6 +64,26 @@ public sealed class SingleInstance : IDisposable
         catch (Exception e) when (e is TimeoutException or IOException) { return false; }
     }
 
+    public const string QuitOp = "app:quit";
+
+    /// <summary>
+    /// Chiede alla Clementine aperta di uscire e aspetta che il processo sia finito: installer e disinstallazione
+    /// devono poterne sostituire o cancellare i file (Windows non sa chiudere da sé un'app senza finestre normali).
+    /// </summary>
+    public static void Quit(string name, int timeoutMs = 10_000)
+    {
+        var others = System.Diagnostics.Process.GetProcessesByName(Path.GetFileNameWithoutExtension(Environment.ProcessPath!))
+            .Where(p => p.Id != Environment.ProcessId).ToList();
+        if (others.Count == 0) return;
+        TrySend(name, new OpRequest(QuitOp, [])); // appena avviata la pipe apre dopo qualche secondo: TrySend aspetta
+        foreach (var process in others)
+            if (!process.WaitForExit(timeoutMs))
+            {
+                process.Kill(); // ultima risorsa: lasciarla viva vorrebbe dire file a metà cancellati sotto di lei
+                process.WaitForExit(timeoutMs);
+            }
+    }
+
     public void Dispose()
     {
         _cts.Cancel();

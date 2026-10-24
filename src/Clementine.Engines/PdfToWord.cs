@@ -274,7 +274,7 @@ static class PdfToWord
     static (List<PdfRectangle> Horizontal, List<PdfRectangle> Vertical, List<PdfRectangle> Bullets) Graphics(Page page)
     {
         List<PdfRectangle> horizontal = [], vertical = [], bullets = [];
-        foreach (var path in page.ExperimentalAccess.Paths)
+        foreach (var path in page.Paths)
             foreach (var sub in path)
             {
                 if (sub.GetBoundingRectangle() is not { } box) continue;
