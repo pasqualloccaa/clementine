@@ -22,7 +22,7 @@ public static class Toolbox
                     if (ext is "jpg" or "png" or "webp" or "avif")
                         tools.Add(new("tool:compress", "Comprimi", kind, null, "compresso"));
                     tools.Add(new("tool:resize50", "Riduci 50%", kind, null, "50%"));
-                    tools.Add(new("tool:resize", "Ridimensiona…", kind, null, "ridimensionata"));
+                    tools.Add(new("tool:resize", "Dimensioni…", kind, null, "ridimensionata"));
                     tools.Add(new("tool:rotate90", "Ruota 90°", kind, null, "ruotata"));
                     tools.Add(new("tool:web", "Per il web", kind, "webp", "web"));
                     tools.Add(new("tool:crop", "Ritaglia…", kind, null, "ritagliata"));

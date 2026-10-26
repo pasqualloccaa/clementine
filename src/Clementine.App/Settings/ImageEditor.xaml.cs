@@ -100,6 +100,7 @@ public partial class ImageEditor : Window
         var button = new RadioButton
         {
             Content = content, GroupName = group, IsChecked = selected, Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(0, 0, 6, 6),
+            Foreground = Brushes.Black, // come i pulsanti (Theme): restano chiari anche nel tema scuro
             Style = (Style)FindResource(typeof(ToggleButton)),
         };
         button.Checked += (_, _) => choose();

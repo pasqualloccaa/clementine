@@ -25,6 +25,17 @@ public static class Theme
         window.Resources[SystemColors.HotTrackBrushKey] = new SolidColorBrush(Color.FromRgb(0x6C, 0xB8, 0xFF));
         // i pulsanti restano chiari (il loro stile di sistema non ha una versione scura): testo scuro
         window.Resources[typeof(Button)] = new Style(typeof(Button)) { Setters = { new Setter(Control.ForegroundProperty, Brushes.Black) } };
+        // le caselle di testo invece si scuriscono: con lo stile di sistema il testo chiaro finiva su sfondo bianco
+        window.Resources[typeof(TextBox)] = new Style(typeof(TextBox))
+        {
+            Setters =
+            {
+                new Setter(Control.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0x2B, 0x2B, 0x2B))),
+                new Setter(Control.ForegroundProperty, text),
+                new Setter(Control.BorderBrushProperty, new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70))),
+                new Setter(System.Windows.Controls.Primitives.TextBoxBase.CaretBrushProperty, text),
+            },
+        };
         window.SourceInitialized += (_, _) =>
         {
             var on = 1;

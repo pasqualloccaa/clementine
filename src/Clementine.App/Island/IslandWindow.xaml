@@ -18,15 +18,15 @@
             </Ellipse>
         </Grid>
 
-        <Canvas x:Name="WheelCanvas" Width="300" Height="300" Visibility="Collapsed" RenderTransformOrigin="0.5,0.5">
+        <Canvas x:Name="WheelCanvas" Width="440" Height="440" Visibility="Collapsed" RenderTransformOrigin="0.5,0.5">
             <Canvas.RenderTransform>
                 <ScaleTransform x:Name="WheelScale" />
             </Canvas.RenderTransform>
             <!-- disco opaco: senza riempimento la finestra trasparente non riceverebbe il drag -->
-            <Ellipse x:Name="Disk" Width="300" Height="300" Fill="#E61E1E1E" />
+            <Ellipse x:Name="Disk" Width="440" Height="440" Fill="#E61E1E1E" />
             <!-- mozzo: fermarsi qui sopra ~800 ms cambia anello (Converti → Strumenti → Azioni) -->
-            <Ellipse x:Name="Hub" Canvas.Left="122" Canvas.Top="122" Width="56" Height="56" Fill="#FFF57C00" />
-            <TextBlock x:Name="HubLabel" Canvas.Left="116" Canvas.Top="142" Width="68" TextAlignment="Center"
+            <Ellipse x:Name="Hub" Canvas.Left="192" Canvas.Top="192" Width="56" Height="56" Fill="#FFF57C00" />
+            <TextBlock x:Name="HubLabel" Canvas.Left="186" Canvas.Top="212" Width="68" TextAlignment="Center"
                        Foreground="White" FontSize="10" FontWeight="SemiBold" IsHitTestVisible="False" />
         </Canvas>
     </Grid>

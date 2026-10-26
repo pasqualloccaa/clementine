@@ -15,8 +15,9 @@ namespace Clementine.App.Island;
 
 public partial class IslandWindow : Window
 {
-    const double IslandSize = 56, WheelSize = 300, TabWidth = 12, SnapDistance = 24;
-    const double HubRadius = 34, OuterRadius = 145;
+    const double IslandSize = 56, WheelSize = 440, TabWidth = 12, SnapDistance = 24;
+    // 440 e non 300: l'anello Strumenti delle foto ha 13 spicchi e "Ridimensiona…" non ci stava
+    const double HubRadius = 34, OuterRadius = 215;
     // ruota nei colori del tema di Windows: scelti a ogni apertura
     static readonly Brush DarkDisk = Frozen(Color.FromArgb(0xE6, 0x1E, 0x1E, 0x1E)), DarkSlice = Frozen(Color.FromRgb(0x3A, 0x3A, 0x3A));
     static readonly Brush LightDisk = Frozen(Color.FromArgb(0xF2, 0xF7, 0xF7, 0xF7)), LightSlice = Frozen(Color.FromRgb(0xE2, 0xE2, 0xE2));
@@ -216,8 +217,9 @@ public partial class IslandWindow : Window
 
         var c = new Point(WheelSize / 2, WheelSize / 2);
         var step = 2 * Math.PI / ops.Count;
-        var mid = (HubRadius + OuterRadius) / 2;
-        var labelWidth = Math.Min(80, 2 * mid * Math.Sin(Math.Min(step, Math.PI) / 2) - 4);
+        // con tanti spicchi le scritte vanno verso il bordo esterno, dove lo spicchio è più largo
+        var mid = ops.Count > 8 ? OuterRadius - 42 : (HubRadius + OuterRadius) / 2 + 10;
+        var labelWidth = Math.Min(110, 2 * mid * Math.Sin(Math.Min(step, Math.PI) / 2) * 0.92 - 4);
         const double gap = 0.02;
         for (var i = 0; i < ops.Count; i++)
         {
@@ -237,9 +239,10 @@ public partial class IslandWindow : Window
                 {
                     new TextBlock
                     {
-                        Text = ops[i].Label, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap,
+                        // WORD JOINER: "…" non va a capo da solo
+                        Text = ops[i].Label.Replace("…", "⁠…"), TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap,
                         VerticalAlignment = VerticalAlignment.Center, Foreground = _labelBrush,
-                        FontSize = ops.Count > 8 || ops[i].Label.Length > 6 ? 12 : 15, FontWeight = FontWeights.SemiBold,
+                        FontSize = FitFont(ops[i].Label, labelWidth), FontWeight = FontWeights.SemiBold,
                     },
                 },
             };
@@ -250,6 +253,17 @@ public partial class IslandWindow : Window
         }
         var hub = WheelCanvas.Children.IndexOf(Hub);
         foreach (var item in _wheelItems) WheelCanvas.Children.Insert(hub++, item); // sotto il mozzo
+    }
+
+    /// <summary>Il carattere più grande (fino a 15) in cui nessuna parola va spezzata e tutto sta su due righe.</summary>
+    double FitFont(string label, double width)
+    {
+        const double max = 15;
+        var typeface = new Typeface(FontFamily, FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
+        double Measure(string text) => new FormattedText(text, System.Globalization.CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
+            typeface, max, Brushes.White, VisualTreeHelper.GetDpi(this).PixelsPerDip).WidthIncludingTrailingWhitespace;
+        var longestWord = label.Split(' ').Max(Measure);
+        return Math.Max(10, Math.Min(max, max * Math.Min(0.95 * width / longestWord, 1.8 * width / Measure(label))));
     }
 
     void OpenWheel(DragEventArgs e)
