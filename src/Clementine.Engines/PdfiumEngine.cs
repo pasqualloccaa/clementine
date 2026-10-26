@@ -22,6 +22,7 @@ public sealed class PdfiumEngine : IEngine
     {
         if (job.Op.Id == Toolbox.MergePdf.Id) Merge(job, progress, ct);
         else if (job.Op.Id == "tool:split-pdf") Split(job, progress, ct);
+        else if (job.Op.Id == "tool:pages") Pages(job, progress);
         else if (job.Op.TargetExtension == "docx") PdfToWord.Convert(job.Input, job.Output, progress, ct);
         else Render(job, progress, ct);
         return Task.CompletedTask;
@@ -49,6 +50,24 @@ static void Merge(Job job, IProgress<double> progress, CancellationToken ct)
             File.WriteAllBytes(Path.Combine(folder, $"{name} - {PageNumber(i, count)}.pdf"), single.Build());
             progress.Report((i + 1.0) / count);
         }
+    }
+
+    public static int PageCount(string path)
+    {
+        using var pdf = PdfDocument.Open(path);
+        return pdf.NumberOfPages;
+    }
+
+    /// <summary>Solo le pagine scelte, nell'ordine scritto ("3,1,2", "1-5,8"): riordina, estrae ed elimina in un colpo.</summary>
+    static void Pages(Job job, IProgress<double> progress)
+    {
+        using var source = PdfDocument.Open(job.Input);
+        var pages = ToolArgs.Pages(job.Op.Argument ?? "", source.NumberOfPages)
+            ?? throw new ArgumentException($"Pagine non valide per un PDF di {source.NumberOfPages}: {job.Op.Argument}");
+        using var builder = new PdfDocumentBuilder();
+        foreach (var page in pages) builder.AddPage(source, page);
+        File.WriteAllBytes(job.Output, builder.Build());
+        progress.Report(1);
     }
 
     static string PageNumber(int index, int count) => (index + 1).ToString().PadLeft(count.ToString().Length, '0');

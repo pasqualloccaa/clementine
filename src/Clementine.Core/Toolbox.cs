@@ -3,8 +3,8 @@ namespace Clementine.Core;
 /// <summary>Anelli Strumenti (Ctrl) e Azioni (Alt), più l'insieme dei tre anelli per la ruota.</summary>
 public static class Toolbox
 {
-    // shortcut: niente strumenti che chiedono parametri o un editor (ritaglia, annota, redazione, trim, split video,
-    // velocità, join video, riordina PDF, comprimi PDF, collage, leggi/modifica metadati, QR): servono interfacce dedicate
+    // shortcut: niente strumenti che chiedono un editor (ritaglio libero, annota, redazione, collage), split/join video
+    // e comprimi PDF (senza Ghostscript si perderebbe il testo selezionabile)
     public static readonly Operation Zip = new("tool:zip", "ZIP", null, "zip", Combines: true);
     public static readonly Operation ImagesToPdf = new("tool:images-to-pdf", "PDF", FileKind.Image, "pdf", Combines: true);
     public static readonly Operation MergePdf = new("tool:merge-pdf", "Unisci", FileKind.Pdf, "pdf", "unito", Combines: true);
@@ -24,6 +24,8 @@ public static class Toolbox
                     tools.Add(new("tool:resize50", "Riduci 50%", kind, null, "50%"));
                     tools.Add(new("tool:rotate90", "Ruota 90°", kind, null, "ruotata"));
                     tools.Add(new("tool:web", "Per il web", kind, "webp", "web"));
+                    tools.Add(new("tool:crop", "Ritaglia…", kind, null, "ritagliata"));
+                    if (ext is "jpg" or "webp" or "avif") tools.Add(new("tool:target-size", "Comprimi a…", kind, null, "compresso"));
                     tools.Add(ImagesToPdf);
                     break;
                 case FileKind.Image:
@@ -32,16 +34,21 @@ public static class Toolbox
                 case FileKind.Video:
                     tools.Add(new("tool:compress-video", "Comprimi", kind, "mp4", "compresso"));
                     tools.Add(new("tool:web", "Per il web", kind, "mp4", "web"));
+                    tools.Add(new("tool:trim", "Taglia…", kind, null, "tagliato"));
+                    tools.Add(new("tool:speed", "Velocità…", kind, "mp4", "velocità"));
+                    tools.Add(new("tool:target-size", "Comprimi a…", kind, "mp4", "compresso"));
                     tools.Add(new("tool:extract-audio", "Estrai audio", kind, "m4a"));
                     tools.Add(new("tool:frames", "Fotogrammi", kind, "jpg", "fotogrammi"));
                     break;
                 case FileKind.Audio:
                     tools.Add(new("tool:normalize", "Normalizza", kind, null, "normalizzato"));
+                    tools.Add(new("tool:trim", "Taglia…", kind, null, "tagliato"));
                     tools.Add(new("tool:mono", "Mono", kind, null, "mono"));
                     break;
                 case FileKind.Pdf:
                     tools.Add(MergePdf);
                     tools.Add(new("tool:split-pdf", "Dividi", kind, "pdf", "pagine"));
+                    tools.Add(new("tool:pages", "Pagine…", kind, "pdf", "pagine scelte"));
                     tools.Add(new("convert:txt", "Estrai testo", kind, "txt"));
                     break;
             }
@@ -69,6 +76,9 @@ public static class Toolbox
     ];
 
     public static bool IsAction(Operation op) => op.Id.StartsWith("action:");
+
+    /// <summary>Strumenti che prima di partire chiedono un valore (Operation.Argument).</summary>
+    public static bool AsksArgument(Operation op) => op.Id is "tool:trim" or "tool:speed" or "tool:target-size" or "tool:crop" or "tool:pages";
 
     /// <summary>I tre anelli, indicizzati per Ring.</summary>
     public static IReadOnlyList<Operation>[] RingsFor(IReadOnlyList<string> paths) =>

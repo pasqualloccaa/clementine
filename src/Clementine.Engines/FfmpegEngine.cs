@@ -19,10 +19,22 @@ public sealed class FfmpegEngine(string ffmpegDir) : IEngine
 
         var output = job.Output;
         var ext = Formats.Extension(output);
+        var arg = job.Op.Argument ?? "";
+        string[] input = [];
+        if (job.Op.Id == "tool:trim")
+        {
+            var (start, end) = ToolArgs.TimeRange(arg) ?? throw new ArgumentException($"Intervallo non valido: {arg}");
+            if (duration > 0 && start >= duration) throw new InvalidOperationException($"Il file dura {duration:0} secondi: l'inizio è oltre la fine");
+            input = ["-ss", Invariant(start), "-to", Invariant(end)];
+            duration = (duration > 0 ? Math.Min(end, duration) : end) - start;
+        }
+        var speed = job.Op.Id == "tool:speed" ? double.Parse(arg, CultureInfo.InvariantCulture) : 1;
         string[] codec = job.Op.Id switch
         {
             "tool:compress-video" => Compress,
             "tool:web" => Web,
+            "tool:speed" => Speed(speed),
+            "tool:target-size" => TargetSize(ToolArgs.Size(arg) ?? throw new ArgumentException($"Dimensione non valida: {arg}"), duration),
             // loudnorm lavora a 192 kHz: si torna a 48 kHz, che vale per tutti i formati di uscita
             "tool:normalize" => ["-af", "loudnorm=I=-16:TP=-1.5:LRA=11", "-ar", "48000", .. CodecArgs(ext)],
             "tool:mono" => ["-ac", "1", .. CodecArgs(ext)],
@@ -35,11 +47,11 @@ public sealed class FfmpegEngine(string ffmpegDir) : IEngine
             output = Path.Combine(Directory.CreateDirectory(job.Output).FullName, $"{Path.GetFileNameWithoutExtension(job.Input)} - %04d.jpg");
         }
 
-        string[] args = ["-hide_banner", "-nostdin", "-n", "-i", job.Input, "-sn", .. codec, "-progress", "pipe:1", "-nostats", output];
+        string[] args = ["-hide_banner", "-nostdin", "-n", .. input, "-i", job.Input, "-sn", .. codec, "-progress", "pipe:1", "-nostats", output];
         await ProcessRunner.RunAsync(_ffmpeg, args, line =>
         {
             if (duration > 0 && line.StartsWith("out_time_us=") && long.TryParse(line[12..], out var us))
-                progress.Report(Math.Clamp(us / 1e6 / duration, 0, 1));
+                progress.Report(Math.Clamp(us / 1e6 / (duration / speed), 0, 1));
         }, ct);
     }
 
@@ -67,6 +79,26 @@ public sealed class FfmpegEngine(string ffmpegDir) : IEngine
     // H.264 più compresso, al massimo 1080p di larghezza 1920
     static readonly string[] Compress = ["-c:v", "libx264", "-crf", "28", "-preset", "medium", "-pix_fmt", "yuv420p",
         "-vf", @"scale=trunc(min(1920\,iw)/2)*2:-2", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart"];
+
+    static string Invariant(double value) => value.ToString(CultureInfo.InvariantCulture);
+
+    // video più veloce o più lento, audio compreso (atempo accetta 0,5–2)
+    static string[] Speed(double speed) => ["-vf", $"setpts=PTS/{Invariant(speed)},scale=trunc(iw/2)*2:trunc(ih/2)*2", "-af", $"atempo={Invariant(speed)}",
+        "-c:v", "libx264", "-crf", "23", "-preset", "medium", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart"];
+
+    /// <summary>
+    /// Bitrate dal peso voluto e dalla durata, con il 5% di margine; maxrate tiene il risultato sotto il limite.
+    /// Con pochi kbit/s si riduce anche la risoluzione: meglio piccolo e nitido che grande e a quadretti.
+    /// </summary>
+    internal static string[] TargetSize(long bytes, double duration)
+    {
+        if (duration <= 0) throw new InvalidOperationException("Durata del video sconosciuta: non si può calcolare la compressione");
+        const int audio = 96;
+        var video = (int)Math.Max(bytes * 8 / 1000.0 / duration * 0.95 - audio, 50);
+        var width = video >= 2500 ? 1920 : video >= 1000 ? 1280 : 854;
+        return ["-c:v", "libx264", "-b:v", $"{video}k", "-maxrate", $"{video * 6 / 5}k", "-bufsize", $"{video * 2}k", "-preset", "medium",
+            "-pix_fmt", "yuv420p", "-vf", $@"scale=trunc(min({width}\,iw)/2)*2:-2", "-c:a", "aac", "-b:a", $"{audio}k", "-movflags", "+faststart"];
+    }
 
     // preset "Per il web": 1280 px, più compresso, senza metadati, riproducibile mentre si scarica
     static readonly string[] Web = ["-map_metadata", "-1", "-c:v", "libx264", "-crf", "26", "-preset", "medium", "-pix_fmt", "yuv420p",

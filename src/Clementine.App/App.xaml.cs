@@ -150,6 +150,8 @@ public partial class App : Application
     {
         if (op.Id == "action:share") FileActions.Share(files); // va chiamata subito: è il momento in cui si ha il primo piano
         else if (Toolbox.IsAction(op)) Dispatcher.BeginInvoke(() => FileActions.RunAsync(op, files));
+        // la finestra si apre dopo il Drop: dentro, Esplora file resterebbe bloccato finché non si chiude
+        else if (Toolbox.AsksArgument(op)) Dispatcher.BeginInvoke(() => { if (ArgumentDialog.Ask(op, files) is { } chosen) Enqueue(files, chosen); });
         else Enqueue(files, op);
     }
 
@@ -210,7 +212,7 @@ public partial class App : Application
             var op = Toolbox.Find(recent.Input, recent.OpId);
             var item = new Forms.ToolStripMenuItem(Path.GetFileName(recent.Output));
             item.DropDownItems.Add(new Forms.ToolStripMenuItem($"Ripeti ({op?.Label ?? recent.OpId})", null,
-                (_, _) => Enqueue([recent.Input], op!)) { Enabled = op is not null && File.Exists(recent.Input) });
+                (_, _) => Run(op!, [recent.Input])) { Enabled = op is not null && File.Exists(recent.Input) });
             item.DropDownItems.Add(new Forms.ToolStripMenuItem("Apri cartella", null,
                 (_, _) => Process.Start("explorer.exe", $"/select,\"{recent.Output}\"")));
             items.Add(item);

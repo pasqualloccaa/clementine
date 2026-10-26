@@ -188,6 +188,67 @@ public class ToolEngineTests
         Assert.Equal((300u, 200u), (kept.Width, kept.Height));
     }
 
+    static Operation WithArg(string path, string id, string argument) => Tool(path, id) with { Argument = argument };
+
+    static double Duration(string path) => double.Parse(Probe(path, "format=duration"), System.Globalization.CultureInfo.InvariantCulture);
+
+    [Fact]
+    public async Task Ffmpeg_ParameterTools()
+    {
+        using var dir = new TempDir();
+        var mov = MakeMedia(dir, "a.mov", "-f", "lavfi", "-i", "testsrc=duration=6:size=1280x720:rate=30",
+            "-f", "lavfi", "-i", "sine=duration=6", "-shortest", "-b:v", "8M");
+        var engine = new FfmpegEngine(FfmpegDir);
+
+        var trimmed = Path.Combine(dir.Path, "t.mov");
+        await engine.RunAsync(new Job(mov, WithArg(mov, "tool:trim", "0:01-0:03"), trimmed), NoProgress, default);
+        Assert.InRange(Duration(trimmed), 1.9, 2.2);
+
+        var fast = Path.Combine(dir.Path, "f.mp4");
+        await engine.RunAsync(new Job(mov, WithArg(mov, "tool:speed", "2"), fast), NoProgress, default);
+        Assert.InRange(Duration(fast), 2.9, 3.2);
+
+        var small = Path.Combine(dir.Path, "s.mp4");
+        await engine.RunAsync(new Job(mov, WithArg(mov, "tool:target-size", "500 KB"), small), NoProgress, default);
+        Assert.InRange(new FileInfo(small).Length, 1, 500 * 1024);
+
+        var wav = MakeMedia(dir, "a.wav", "-f", "lavfi", "-i", "sine=duration=5");
+        var cut = Path.Combine(dir.Path, "cut.wav");
+        await engine.RunAsync(new Job(wav, WithArg(wav, "tool:trim", "2-5"), cut), NoProgress, default);
+        Assert.InRange(Duration(cut), 2.9, 3.1);
+    }
+
+    [Fact]
+    public async Task Magick_CropAndTargetSize()
+    {
+        using var dir = new TempDir();
+        var png = Path.Combine(dir.Path, "a.png");
+        new MagickImage(MagickColors.Orange, 400, 300).Write(png);
+        var cropped = Path.Combine(dir.Path, "c.png");
+        await new MagickEngine().RunAsync(new Job(png, WithArg(png, "tool:crop", "16:9"), cropped), NoProgress, default);
+        using (var image = new MagickImage(cropped)) Assert.Equal((400u, 225u), (image.Width, image.Height));
+
+        var jpg = Path.Combine(dir.Path, "big.jpg");
+        using (var noise = new MagickImage("plasma:", 2000, 1500)) { noise.Quality = 98; noise.Write(jpg); }
+        var fitted = Path.Combine(dir.Path, "fit.jpg");
+        await new MagickEngine().RunAsync(new Job(jpg, WithArg(jpg, "tool:target-size", "100 KB"), fitted), NoProgress, default);
+        Assert.InRange(new FileInfo(fitted).Length, 50 * 1024, 100 * 1024); // sotto il limite, ma senza esagerare
+    }
+
+    [Fact]
+    public async Task Pdf_Pages_ReorderAndDrop()
+    {
+        using var dir = new TempDir();
+        var pdf = Path.Combine(dir.Path, "a.pdf");
+        PdfiumEngineTests.WritePdf(pdf, "Uno", "Due", "Tre");
+        var output = Path.Combine(dir.Path, "out.pdf");
+
+        await new PdfiumEngine().RunAsync(new Job(pdf, WithArg(pdf, "tool:pages", "3,1"), output), NoProgress, default);
+
+        using var doc = UglyToad.PdfPig.PdfDocument.Open(output);
+        Assert.Equal(["Tre", "Uno"], doc.GetPages().Select(p => p.Text.Trim()));
+    }
+
     [Fact]
     public async Task Ffmpeg_WebPreset_AndSmootherGif()
     {

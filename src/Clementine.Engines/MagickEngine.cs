@@ -14,7 +14,7 @@ public sealed class MagickEngine(string? exiftool = null) : IEngine
     static readonly Lazy<bool> HeifEncoder = new(() =>
         BitmapEncoder.GetEncoderInformationEnumerator().Any(i => i.CodecId == BitmapEncoder.HeifEncoderId));
 
-    static readonly string[] Tools = ["tool:compress", "tool:resize50", "tool:rotate90", "tool:web", Toolbox.ImagesToPdf.Id];
+    static readonly string[] Tools = ["tool:compress", "tool:resize50", "tool:rotate90", "tool:web", "tool:crop", "tool:target-size", Toolbox.ImagesToPdf.Id];
 
     public bool CanHandle(Operation op) => op.Kind == FileKind.Image &&
         (op.Id.StartsWith("convert:") ? op.TargetExtension != "heic" || HeifEncoder.Value : Tools.Contains(op.Id));
@@ -32,6 +32,7 @@ public sealed class MagickEngine(string? exiftool = null) : IEngine
         ct.ThrowIfCancellationRequested();
         if (job.Op.Id == "tool:resize50") image.Resize(new Percentage(50));
         if (job.Op.Id == "tool:rotate90") image.Rotate(90);
+        if (job.Op.Id == "tool:crop") Crop(image, job.Op.Argument ?? "");
         if (job.Op.Id == "tool:web") // preset: lato lungo al massimo 1920 px (mai ingrandita), niente metadati né GPS
         {
             image.Resize(new MagickGeometry(1920, 1920) { Greater = true });
@@ -59,8 +60,46 @@ public sealed class MagickEngine(string? exiftool = null) : IEngine
             await WriteHeicAsync(image, job.Output);
             if (File.Exists(exiftool)) await MetadataEngine.CopyAsync(exiftool, job.Input, job.Output, ct);
         }
+        else if (job.Op.Id == "tool:target-size")
+            await File.WriteAllBytesAsync(job.Output, FitSize(image, ToolArgs.Size(job.Op.Argument ?? "") ?? throw new ArgumentException($"Dimensione non valida: {job.Op.Argument}"), ct), ct);
         else image.Write(job.Output);
         progress.Report(1);
+    }
+
+    /// <summary>"16:9" → il rettangolo più grande con quelle proporzioni, al centro.</summary>
+    static void Crop(MagickImage image, string ratio)
+    {
+        var parts = ratio.Split(':');
+        if (parts.Length != 2 || !double.TryParse(parts[0], out var w) || !double.TryParse(parts[1], out var h) || w <= 0 || h <= 0)
+            throw new ArgumentException($"Proporzioni non valide: {ratio}");
+        var (width, height) = image.Width / (double)image.Height > w / h
+            ? ((uint)Math.Round(image.Height * w / h), image.Height)
+            : (image.Width, (uint)Math.Round(image.Width * h / w));
+        image.Crop(new MagickGeometry(width, height), Gravity.Center);
+        image.ResetPage();
+    }
+
+    /// <summary>
+    /// La qualità più alta che sta sotto il peso voluto (ricerca binaria); se nemmeno al minimo ci sta, si rimpicciolisce del 20% e si riprova.
+    /// </summary>
+    internal static byte[] FitSize(MagickImage image, long bytes, CancellationToken ct)
+    {
+        while (true)
+        {
+            byte[]? best = null;
+            for (uint low = 5, high = 95; low <= high;)
+            {
+                ct.ThrowIfCancellationRequested();
+                var quality = (low + high) / 2;
+                image.Quality = quality;
+                var data = image.ToByteArray();
+                if (data.Length <= bytes) { best = data; low = quality + 1; }
+                else high = quality - 1;
+            }
+            if (best is not null) return best;
+            if (image.Width < 64) throw new InvalidOperationException("Impossibile scendere sotto quel peso");
+            image.Resize(new Percentage(80));
+        }
     }
 
     /// <summary>Un PDF con un'immagine per pagina, nell'ordine dei file.</summary>

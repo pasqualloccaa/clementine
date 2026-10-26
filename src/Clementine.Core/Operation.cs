@@ -9,8 +9,10 @@ public enum Ring { Convert, Tools, Actions }
 /// Un'operazione della ruota. Kind indica quale famiglia di motori la esegue (null = qualunque file, es. metadati).
 /// TargetExtension null = stessa estensione dell'originale; Suffix finisce nel nome: "foto (senza metadati).jpg".
 /// Combines: tutti i file del batch diventano un solo risultato (unisci PDF, ZIP…).
+/// Argument: il valore chiesto all'utente dagli strumenti con parametri ("0:30-1:45", "2 MB", "16:9"…), vedi ToolArgs.
 /// </summary>
-public sealed record Operation(string Id, string Label, FileKind? Kind, string? TargetExtension, string? Suffix = null, bool Combines = false);
+public sealed record Operation(string Id, string Label, FileKind? Kind, string? TargetExtension, string? Suffix = null, bool Combines = false,
+    string? Argument = null);
 
 /// <summary>
 /// Un file da elaborare. Output è il percorso temporaneo dove il motore scrive un file oppure,

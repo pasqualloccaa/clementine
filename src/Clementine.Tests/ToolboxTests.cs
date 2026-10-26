@@ -11,7 +11,7 @@ public class ToolboxTests
     public void Jpg_HasImageTools()
     {
         using var dir = new TempDir();
-        Assert.Equal(["tool:compress", "tool:resize50", "tool:rotate90", "tool:web", "tool:images-to-pdf", "metadata:strip", "tool:zip"],
+        Assert.Equal(["tool:compress", "tool:resize50", "tool:rotate90", "tool:web", "tool:crop", "tool:target-size", "tool:images-to-pdf", "metadata:strip", "tool:zip"],
             Tools(dir.File("a.jpg")));
     }
 

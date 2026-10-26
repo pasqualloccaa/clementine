@@ -1,0 +1,17 @@
+<Window x:Class="Clementine.App.Settings.ArgumentDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        SizeToContent="Height" Width="400" ResizeMode="NoResize" Topmost="True"
+        WindowStartupLocation="CenterScreen" FontSize="14">
+    <StackPanel Margin="24,20">
+        <TextBlock x:Name="Prompt" TextWrapping="Wrap" Margin="0,0,0,10" />
+        <TextBox x:Name="Input" Padding="4,3" Visibility="Collapsed" />
+        <TextBlock x:Name="Example" Opacity="0.7" Margin="0,4,0,0" Visibility="Collapsed" />
+        <StackPanel x:Name="Choices" Visibility="Collapsed" />
+        <TextBlock x:Name="Error" Foreground="#E53935" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="Collapsed" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,18,0,0">
+            <Button Content="Avvia" MinWidth="90" Padding="0,4" IsDefault="True" Click="Ok_Click" />
+            <Button Content="Annulla" MinWidth="90" Padding="0,4" Margin="8,0,0,0" IsCancel="True" />
+        </StackPanel>
+    </StackPanel>
+</Window>
