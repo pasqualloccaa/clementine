@@ -36,7 +36,8 @@ public static class ContextMenu
         IReadOnlyList<Operation>[] rings, string exe, Func<Operation, bool> canRun)
     {
         // oltre le 16 voci restano fuori le ultime azioni: "Copia percorso", la meno usata, va in fondo
-        var ops = rings.SelectMany((ring, r) => ring.Where(op => Toolbox.IsAction(op) || canRun(op))
+        // "Riduci 50%" e "Ruota 90°" restano solo sulla ruota: nel menu lasciano posto a ZIP e alle azioni
+        var ops = rings.SelectMany((ring, r) => ring.Where(op => (Toolbox.IsAction(op) || canRun(op)) && op.Id is not ("tool:resize50" or "tool:rotate90"))
                 .OrderBy(op => op.Id == "action:copy-path").Select(op => (Op: op, Ring: r)))
             .Take(MaxCascadeItems).ToList();
         if (ops.Count == 0) return;

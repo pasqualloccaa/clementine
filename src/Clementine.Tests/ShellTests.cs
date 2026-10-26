@@ -52,6 +52,8 @@ public class ContextMenuTests : IDisposable
                 && e.Key.Split('\\')[1] == entries.Single(v => v.Key == verb && v.Name == "ExtendedSubCommandsKey").Value.Split('\\')[1]), 1, ContextMenu.MaxCascadeItems));
         var jpg = entries.Where(e => e.Key.StartsWith(@"Clementine.Menus\jpg\") && e.Key.EndsWith(@"\command")).Select(e => e.Value).ToList();
         Assert.DoesNotContain(jpg, c => c.Contains("action:copy-path")); // la prima a restare fuori
+        Assert.Contains(jpg, c => c.Contains("tool:zip"));
+        Assert.DoesNotContain(jpg, c => c.Contains("tool:resize50")); // solo sulla ruota
         Assert.Contains(entries, e => e.Key == @"Clementine.Menus\jpg\shell\07" && e.Name == "CommandFlags"); // linea prima degli strumenti
     }
 
