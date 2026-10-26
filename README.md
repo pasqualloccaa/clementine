@@ -62,14 +62,14 @@ You need Windows 10 or 11, 64-bit. You don't need to install .NET.
 Open PowerShell and run:
 
 ```powershell
-irm https://raw.githubusercontent.com/GITHUB_USER/clementine/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/pasqualloccaa/clementine/main/install.ps1 | iex
 ```
 
 The script downloads the latest release, checks its SHA-256 and starts the installer.
 
 ### From the download
 
-1. Download `Clementine-win-x64.zip` from the [latest release](https://github.com/GITHUB_USER/clementine/releases/latest).
+1. Download `Clementine-win-x64.zip` from the [latest release](https://github.com/pasqualloccaa/clementine/releases/latest).
 2. Extract it anywhere.
 3. Double-click **Installa Clementine.cmd**.
 
@@ -95,7 +95,7 @@ Clementine has no account, no telemetry and no uploads. Every conversion runs on
 You need the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) and PowerShell 7.
 
 ```powershell
-git clone https://github.com/GITHUB_USER/clementine.git
+git clone https://github.com/pasqualloccaa/clementine.git
 cd clementine
 pwsh installer/build.ps1
 ```

@@ -1,9 +1,9 @@
 # Installs the latest Clementine release from GitHub:
-#   irm https://raw.githubusercontent.com/GITHUB_USER/clementine/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/pasqualloccaa/clementine/main/install.ps1 | iex
 # Downloads the release zip (FFmpeg and ExifTool included), checks its SHA-256 and runs the built-in installer.
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue' # the progress bar makes Invoke-WebRequest many times slower
-$repo = 'GITHUB_USER/clementine'
+$repo = 'pasqualloccaa/clementine'
 
 $release = Invoke-RestMethod "https://api.github.com/repos/$repo/releases/latest"
 $asset = $release.assets | Where-Object name -eq 'Clementine-win-x64.zip' | Select-Object -First 1
