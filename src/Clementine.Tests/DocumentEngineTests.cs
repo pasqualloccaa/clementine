@@ -202,6 +202,25 @@ public class MetadataEngineTests
         new MagickImage(MagickColors.Orange, 200, 200).Write(Path.Combine(dir.Path, "vuota.png"));
 
         Assert.Equal(["https://example.com/clementine"], QrReader.Read(Path.Combine(dir.Path, "qr.png")));
+        // come quelli dei generatori online: moduli neri su sfondo trasparente
+        using (var transparent = new MagickImage(Path.Combine(dir.Path, "qr.png")))
+        {
+            transparent.Transparent(MagickColors.White); // bianco → trasparente
+            transparent.Write(Path.Combine(dir.Path, "trasparente.png"));
+        }
+        Assert.Equal(["https://example.com/clementine"], QrReader.Read(Path.Combine(dir.Path, "trasparente.png")));
+        // QR enorme (moduli da ~30 px) e quasi senza margine: si legge solo rimpicciolito
+        var big = new ZXing.QrCode.QRCodeWriter().encode("https://example.com/clementine", ZXing.BarcodeFormat.QR_CODE, 1000, 1000,
+            new Dictionary<ZXing.EncodeHintType, object> { [ZXing.EncodeHintType.MARGIN] = 1 });
+        using (var huge = new MagickImage(MagickColors.Transparent, 1000, 1000))
+        {
+            using (var pixels = huge.GetPixels())
+                for (var y = 0; y < 1000; y++)
+                    for (var x = 0; x < 1000; x++)
+                        if (big[x, y]) pixels.SetPixel(x, y, [0, 0, 0, 255]);
+            huge.Write(Path.Combine(dir.Path, "enorme.png"));
+        }
+        Assert.Equal(["https://example.com/clementine"], QrReader.Read(Path.Combine(dir.Path, "enorme.png")));
         Assert.Empty(QrReader.Read(Path.Combine(dir.Path, "vuota.png")));
     }
 

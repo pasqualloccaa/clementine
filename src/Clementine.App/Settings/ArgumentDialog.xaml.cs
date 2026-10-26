@@ -24,8 +24,7 @@ public partial class ArgumentDialog : Window
     {
         var value = op.Id switch
         {
-            "tool:trim" => Text("Taglia", "Quale parte tenere? Inizio e fine in minuti:secondi.", "es. 0:30-1:45",
-                t => ToolArgs.TimeRange(t) is null ? "Scrivi inizio e fine, con la fine dopo l'inizio: es. 0:30-1:45" : null),
+            "tool:trim" => Trim(files),
             "tool:speed" => Choice("Velocità", "Quanto più veloce?", [("0,5× (rallentato)", "0.5"), ("1,5×", "1.5"), ("2×", "2")]),
             "tool:target-size" => Text("Comprimi a", "Peso massimo di ogni file.", "es. 2 MB oppure 500 KB",
                 t => ToolArgs.Size(t) is null ? "Scrivi un peso: es. 2 MB oppure 500 KB" : null),
@@ -37,6 +36,13 @@ public partial class ArgumentDialog : Window
         };
         return value is null ? null : op with { Argument = value };
     }
+
+    // l'editor sul primo file, la stessa parte su tutti; se Windows non sa riprodurlo (es. alcuni MKV/WebM), il minutaggio a mano
+    static string? Trim(IReadOnlyList<string> files) =>
+        TrimEditor.Ask(files[0], out var opened) is { } range ? range
+        : opened ? null
+        : Text("Taglia", "Windows non riesce a mostrare questo file. Quale parte tenere? Inizio e fine in minuti:secondi.", "es. 0:30-1:45",
+            t => ToolArgs.TimeRange(t) is null ? "Scrivi inizio e fine, con la fine dopo l'inizio: es. 0:30-1:45" : null);
 
     static string? Pages(IReadOnlyList<string> files)
     {

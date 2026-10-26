@@ -38,7 +38,7 @@ public partial class MetadataDialog : Window
         var gps = Tag("GPSLatitude") is { Length: > 0 } lat ? $"{lat}, {Tag("GPSLongitude")}" : null;
         dialog.Info.Text = string.Join("\n", new[]
         {
-            Tag("ImageSize") is { Length: > 0 } size ? $"Dimensioni: {size.Replace('x', '×')}" : null,
+            Tag("ImageSize") is { Length: > 0 } size ? $"Dimensioni: {size.Replace('x', '×').Replace(' ', '×')} pixel" : null,
             camera != "" ? $"Fotocamera: {camera}" : null,
             Tag("LensModel") is { Length: > 0 } lens ? $"Obiettivo: {lens}" : null,
             gps is null ? "Nessuna posizione GPS" : $"Posizione GPS: {gps}",
