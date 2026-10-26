@@ -11,6 +11,7 @@ public partial class SettingsWindow : Window
         string? libreOffice, string logs)
     {
         InitializeComponent();
+        Theme.Apply(this);
         AutostartBox.IsChecked = autostart;
         AutostartBox.Click += (_, _) => setAutostart(AutostartBox.IsChecked == true);
         ExplorerMenuBox.IsChecked = explorerMenu;

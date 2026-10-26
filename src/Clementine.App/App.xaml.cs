@@ -101,6 +101,12 @@ public partial class App : Application
         };
 
         island.Show();
+        if (!_settings.WelcomeShown)
+        {
+            new WelcomeWindow().Show();
+            _settings.WelcomeShown = true;
+            _settings.Save();
+        }
 
         SetExplorerMenu(_settings.ExplorerMenu);
         _externalTimer.Tick += (_, _) => RunExternal();
@@ -213,6 +219,7 @@ public partial class App : Application
 
         // appunti letti solo qui, all'apertura del menu: mai durante un drag
         if (ClipboardMenu() is { } clipboard) items.Add(clipboard);
+        items.Add(new Forms.ToolStripMenuItem("Come si usa", null, (_, _) => new WelcomeWindow().Show()));
         items.Add(new Forms.ToolStripMenuItem("Impostazioni…", null, (_, _) => ShowSettings()));
         items.Add(new Forms.ToolStripMenuItem("Esci", null, (_, _) => Shutdown()));
     }

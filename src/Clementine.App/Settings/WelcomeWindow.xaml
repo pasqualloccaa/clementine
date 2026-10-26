@@ -1,0 +1,30 @@
+<Window x:Class="Clementine.App.Settings.WelcomeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Benvenuto in Clementine" SizeToContent="Height" Width="520" ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen" FontSize="14">
+    <StackPanel Margin="28,24">
+        <DockPanel Margin="0,0,0,18">
+            <Image Source="/Assets/Clementine.ico" Width="48" Height="48" RenderOptions.BitmapScalingMode="HighQuality" />
+            <TextBlock Text="Benvenuto in Clementine" FontSize="22" FontWeight="SemiBold" VerticalAlignment="Center" Margin="14,0,0,0" />
+        </DockPanel>
+
+        <TextBlock FontWeight="SemiBold" Text="Trascina i file sull'arancia" />
+        <TextBlock TextWrapping="Wrap" Margin="0,2,0,14" Opacity="0.8"
+                   Text="Si apre una ruota: rilascia sullo spicchio che ti serve. Il risultato compare accanto all'originale, che non viene mai toccato." />
+
+        <TextBlock FontWeight="SemiBold" Text="Ctrl e Alt cambiano la ruota" />
+        <TextBlock TextWrapping="Wrap" Margin="0,2,0,14" Opacity="0.8"
+                   Text="Mentre trascini, Ctrl mostra gli strumenti (comprimi, per il web, unisci…), Alt le azioni (copia, sposta, condividi…). Senza tastiera: fermati un attimo sul centro della ruota." />
+
+        <TextBlock FontWeight="SemiBold" Text="Oppure clic destro su un file" />
+        <TextBlock TextWrapping="Wrap" Margin="0,2,0,14" Opacity="0.8"
+                   Text="In Esplora file: Mostra altre opzioni → Clementine." />
+
+        <TextBlock FontWeight="SemiBold" Text="Clic sull'arancia" />
+        <TextBlock TextWrapping="Wrap" Margin="0,2,0,22" Opacity="0.8"
+                   Text="Ultimi file, converti dagli appunti, impostazioni. Puoi spostarla dove vuoi: sul bordo dello schermo si nasconde e riappare al passaggio del mouse." />
+
+        <Button Content="Inizia" HorizontalAlignment="Right" MinWidth="100" Padding="0,5" IsDefault="True" IsCancel="True" Click="Start_Click" />
+    </StackPanel>
+</Window>

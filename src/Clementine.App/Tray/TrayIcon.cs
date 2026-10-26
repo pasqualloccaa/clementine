@@ -1,5 +1,4 @@
 using System.Drawing;
-using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
@@ -16,12 +15,14 @@ sealed class TrayIcon : IDisposable
     {
         _menu.Opening += (_, e) =>
         {
+            // vale anche per i sottomenu, che usano il renderer comune
+            ToolStripManager.Renderer = Settings.Theme.IsDark ? new DarkRenderer() : new ToolStripProfessionalRenderer();
             _menu.Items.Clear();
             buildMenu(_menu.Items);
             e.Cancel = false; // un menu vuoto parte con Cancel = true
         };
         _foreground.CreateHandle(new CreateParams());
-        _icon = new NotifyIcon { Text = "Clementine", Icon = CreateIcon(), ContextMenuStrip = _menu, Visible = true };
+        _icon = new NotifyIcon { Text = "Clementine", Icon = Icon.ExtractAssociatedIcon(Environment.ProcessPath!), ContextMenuStrip = _menu, Visible = true };
         _icon.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) ShowMenu(Cursor.Position); };
     }
 
@@ -40,19 +41,35 @@ sealed class TrayIcon : IDisposable
         _foreground.DestroyHandle();
     }
 
-    // shortcut: icona disegnata a runtime, sostituire con un .ico vero in M7
-    static Icon CreateIcon()
+    sealed class DarkRenderer() : ToolStripProfessionalRenderer(new DarkColors())
     {
-        using var bmp = new Bitmap(32, 32);
-        using (var g = Graphics.FromImage(bmp))
-        using (var orange = new SolidBrush(Color.FromArgb(245, 124, 0)))
-        using (var green = new SolidBrush(Color.FromArgb(46, 125, 50)))
+        protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
         {
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.FillEllipse(orange, 2, 5, 28, 26);
-            g.FillEllipse(green, 15, 0, 11, 7);
+            e.TextColor = e.Item.Enabled ? Color.FromArgb(240, 240, 240) : Color.Gray;
+            base.OnRenderItemText(e);
         }
-        return Icon.FromHandle(bmp.GetHicon());
+
+        protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e)
+        {
+            e.ArrowColor = Color.FromArgb(240, 240, 240);
+            base.OnRenderArrow(e);
+        }
+    }
+
+    sealed class DarkColors : ProfessionalColorTable
+    {
+        static readonly Color Back = Color.FromArgb(43, 43, 43), Hover = Color.FromArgb(65, 65, 65), Line = Color.FromArgb(75, 75, 75);
+        public override Color ToolStripDropDownBackground => Back;
+        public override Color ImageMarginGradientBegin => Back;
+        public override Color ImageMarginGradientMiddle => Back;
+        public override Color ImageMarginGradientEnd => Back;
+        public override Color MenuBorder => Line;
+        public override Color MenuItemBorder => Hover;
+        public override Color MenuItemSelected => Hover;
+        public override Color MenuItemSelectedGradientBegin => Hover;
+        public override Color MenuItemSelectedGradientEnd => Hover;
+        public override Color SeparatorDark => Line;
+        public override Color SeparatorLight => Back;
     }
 
     [DllImport("user32.dll")]

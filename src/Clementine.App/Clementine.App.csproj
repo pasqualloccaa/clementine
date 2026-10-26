@@ -9,9 +9,14 @@
     <SatelliteResourceLanguages>it;en</SatelliteResourceLanguages>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <ApplicationIcon>Assets\Clementine.ico</ApplicationIcon>
     <!-- solo per NotifyIcon (tray) e Screen (aree di lavoro multi-monitor) -->
     <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\Clementine.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Clementine.Tests" />

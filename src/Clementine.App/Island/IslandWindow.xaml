@@ -7,20 +7,8 @@
     <Grid>
         <Grid x:Name="IslandView" Width="56" Height="56" Cursor="Hand"
               MouseLeftButtonDown="Island_MouseLeftButtonDown">
-            <Ellipse Margin="3">
-                <Ellipse.Fill>
-                    <RadialGradientBrush GradientOrigin="0.35,0.3">
-                        <GradientStop Color="#FFFFB74D" Offset="0" />
-                        <GradientStop Color="#FFF57C00" Offset="1" />
-                    </RadialGradientBrush>
-                </Ellipse.Fill>
-            </Ellipse>
-            <Ellipse Width="16" Height="8" Fill="#FF2E7D32" HorizontalAlignment="Center" VerticalAlignment="Top"
-                     Margin="14,3,0,0" RenderTransformOrigin="0,1">
-                <Ellipse.RenderTransform>
-                    <RotateTransform Angle="-25" />
-                </Ellipse.RenderTransform>
-            </Ellipse>
+            <!-- stessa icona dell'exe e della tray; l'.ico ha anche il fotogramma da 256 px, ridotto qui in alta qualità -->
+            <Image Source="/Assets/Clementine.ico" Margin="1" RenderOptions.BitmapScalingMode="HighQuality" />
             <!-- anello di avanzamento: StrokeDashArray impostato da SetProgress; parte dalle ore 12 -->
             <Ellipse x:Name="ProgressRing" Margin="3" Stroke="White" StrokeThickness="3" Visibility="Collapsed"
                      IsHitTestVisible="False" RenderTransformOrigin="0.5,0.5">
@@ -35,7 +23,7 @@
                 <ScaleTransform x:Name="WheelScale" />
             </Canvas.RenderTransform>
             <!-- disco opaco: senza riempimento la finestra trasparente non riceverebbe il drag -->
-            <Ellipse Width="300" Height="300" Fill="#E61E1E1E" />
+            <Ellipse x:Name="Disk" Width="300" Height="300" Fill="#E61E1E1E" />
             <!-- mozzo: fermarsi qui sopra ~800 ms cambia anello (Converti → Strumenti → Azioni) -->
             <Ellipse x:Name="Hub" Canvas.Left="122" Canvas.Top="122" Width="56" Height="56" Fill="#FFF57C00" />
             <TextBlock x:Name="HubLabel" Canvas.Left="116" Canvas.Top="142" Width="68" TextAlignment="Center"

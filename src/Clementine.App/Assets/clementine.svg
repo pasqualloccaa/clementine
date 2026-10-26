@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- sorgente dell'icona: Clementine.ico si rigenera con installer/make-icon.ps1 -->
+  <defs>
+    <radialGradient id="peel" cx="0.38" cy="0.36" r="0.7">
+      <stop offset="0" stop-color="#FFC266"/>
+      <stop offset="0.55" stop-color="#FB8C00"/>
+      <stop offset="1" stop-color="#E65100"/>
+    </radialGradient>
+    <linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#66BB6A"/>
+      <stop offset="1" stop-color="#2E7D32"/>
+    </linearGradient>
+  </defs>
+  <circle cx="128" cy="144" r="104" fill="url(#peel)"/>
+  <ellipse cx="92" cy="104" rx="26" ry="16" fill="#FFFFFF" fill-opacity="0.35" transform="rotate(-30 92 104)"/>
+  <path d="M128 46 C126 36 124 28 118 20" stroke="#6D4C41" stroke-width="9" stroke-linecap="round" fill="none"/>
+  <path d="M130 44 C150 10 196 6 214 22 C196 50 160 58 130 44 Z" fill="url(#leaf)"/>
+  <path d="M134 42 C160 30 184 24 206 22" stroke="#1B5E20" stroke-width="3" stroke-linecap="round" fill="none" stroke-opacity="0.6"/>
+</svg>

@@ -17,7 +17,10 @@ public partial class IslandWindow : Window
 {
     const double IslandSize = 56, WheelSize = 300, TabWidth = 12, SnapDistance = 24;
     const double HubRadius = 34, OuterRadius = 145;
-    static readonly Brush SliceBrush = Frozen(Color.FromRgb(0x3A, 0x3A, 0x3A));
+    // ruota nei colori del tema di Windows: scelti a ogni apertura
+    static readonly Brush DarkDisk = Frozen(Color.FromArgb(0xE6, 0x1E, 0x1E, 0x1E)), DarkSlice = Frozen(Color.FromRgb(0x3A, 0x3A, 0x3A));
+    static readonly Brush LightDisk = Frozen(Color.FromArgb(0xF2, 0xF7, 0xF7, 0xF7)), LightSlice = Frozen(Color.FromRgb(0xE2, 0xE2, 0xE2));
+    static readonly Brush LightText = Frozen(Color.FromRgb(0x20, 0x20, 0x20));
     static readonly Brush HotBrush = Frozen(Color.FromRgb(0xF5, 0x7C, 0x00));
 
     readonly AppSettings _settings;
@@ -32,6 +35,7 @@ public partial class IslandWindow : Window
     Rect _dockArea;
     bool _wheelOpen, _working;
     int _hot = -1;
+    Brush _sliceBrush = DarkSlice, _labelBrush = Brushes.White;
 
     /// <summary>Le operazioni dei tre anelli (indice = Ring) per i file trascinati; tutti vuoti = la ruota non si apre.</summary>
     public Func<string[], IReadOnlyList<Operation>[]> OperationsFor { get; init; } = _ => [[], [], []];
@@ -70,6 +74,7 @@ public partial class IslandWindow : Window
 
     void Island_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        StopSlide();
         var before = (Left, Top);
         _settings.Dock = DockSide.None; // niente ritrazione mentre si trascina
         DragMove();
@@ -98,10 +103,24 @@ public partial class IslandWindow : Window
     void SetRetracted(bool retracted)
     {
         if (_wheelOpen || _settings.Dock == DockSide.None || (retracted && _working)) return;
-        Left = _settings.Dock == DockSide.Left
+        Slide(_settings.Dock == DockSide.Left
             ? _dockArea.Left - (retracted ? IslandSize - TabWidth : 0)
-            : _dockArea.Right - (retracted ? TabWidth : IslandSize);
+            : _dockArea.Right - (retracted ? TabWidth : IslandSize));
     }
+
+    // l'isola scivola sul bordo invece di saltare; FillBehavior.Stop: a fine animazione resta il valore vero di Left
+    void Slide(double left)
+    {
+        var from = Left;
+        StopSlide();
+        Left = left;
+        if (from != left)
+            BeginAnimation(LeftProperty, new DoubleAnimation(from, left, TimeSpan.FromMilliseconds(140))
+                { EasingFunction = new QuadraticEase(), FillBehavior = FillBehavior.Stop });
+    }
+
+    // prima di ogni spostamento diretto: un'animazione ancora in corso coprirebbe il nuovo valore
+    void StopSlide() => BeginAnimation(LeftProperty, null);
 
     /// <summary>
     /// Aggancio solo ai bordi esterni del desktop: sul confine tra due monitor la parte "ritratta" finirebbe sull'altro
@@ -189,7 +208,7 @@ public partial class IslandWindow : Window
             var path = new Path
             {
                 Data = WheelLayout.Sector(c, HubRadius, OuterRadius, i * step - step / 2 + gap, i * step + step / 2 - gap),
-                Fill = SliceBrush,
+                Fill = _sliceBrush,
             };
             _slices.Add(path);
 
@@ -203,7 +222,7 @@ public partial class IslandWindow : Window
                     new TextBlock
                     {
                         Text = ops[i].Label, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap,
-                        VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.White,
+                        VerticalAlignment = VerticalAlignment.Center, Foreground = _labelBrush,
                         FontSize = ops.Count > 8 || ops[i].Label.Length > 6 ? 12 : 15, FontWeight = FontWeights.SemiBold,
                     },
                 },
@@ -220,6 +239,7 @@ public partial class IslandWindow : Window
     void OpenWheel(DragEventArgs e)
     {
         _wheelOpen = true;
+        StopSlide();
         var dpi = VisualTreeHelper.GetDpi(this);
         var px = PointToScreen(e.GetPosition(this));
         var cursor = new Point(px.X / dpi.DpiScaleX, px.Y / dpi.DpiScaleY);
@@ -234,6 +254,8 @@ public partial class IslandWindow : Window
         var grow = new DoubleAnimation(0.6, 1, TimeSpan.FromMilliseconds(120)) { EasingFunction = new QuadraticEase() };
         WheelScale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
         WheelScale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+        // da 0.4 e non da 0: una finestra trasparente al 100% non riceve il drag e la ruota si richiuderebbe
+        WheelCanvas.BeginAnimation(OpacityProperty, new DoubleAnimation(0.4, 1, TimeSpan.FromMilliseconds(120)));
     }
 
     void CloseWheel()
@@ -245,6 +267,7 @@ public partial class IslandWindow : Window
         WheelCanvas.Visibility = Visibility.Collapsed;
         IslandView.Visibility = Visibility.Visible;
         Width = Height = IslandSize;
+        StopSlide();
         Left = _settings.Left ?? Left;
         Top = _settings.Top ?? Top;
         SetRetracted(true);
@@ -253,7 +276,7 @@ public partial class IslandWindow : Window
     void SetHot(int hot)
     {
         if (hot == _hot) return;
-        if (_hot >= 0) _slices[_hot].Fill = SliceBrush;
+        if (_hot >= 0) _slices[_hot].Fill = _sliceBrush;
         if (hot >= 0) _slices[hot].Fill = HotBrush;
         _hot = hot;
     }
@@ -285,6 +308,9 @@ public partial class IslandWindow : Window
             && OperationsFor(files) is var rings && rings.Any(r => r.Count > 0))
         {
             _rings = rings;
+            var dark = Theme.IsDark;
+            Disk.Fill = dark ? DarkDisk : LightDisk;
+            (_sliceBrush, _labelBrush) = dark ? (DarkSlice, Brushes.White) : (LightSlice, LightText);
             _manualRing = rings[(int)Ring.Convert].Count > 0 ? Ring.Convert : NextRing(Ring.Convert);
             _hub.Reset();
             ShowRing(RingFor(e));

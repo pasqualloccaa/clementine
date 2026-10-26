@@ -18,6 +18,7 @@ public sealed class AppSettings
     public double? Top { get; set; }
     public DockSide Dock { get; set; }
     public bool ExplorerMenu { get; set; } = true;
+    public bool WelcomeShown { get; set; }
     public List<RecentItem> Recent { get; set; } = [];
 
     public void AddRecent(RecentItem item)
