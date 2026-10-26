@@ -82,9 +82,7 @@ public partial class IslandWindow : Window
     {
         _dockArea = WorkAreaAt(new Point(Left + IslandSize / 2, Top + IslandSize / 2));
         var wa = _dockArea;
-        _settings.Dock = Left < wa.Left + SnapDistance ? DockSide.Left
-            : Left + IslandSize > wa.Right - SnapDistance ? DockSide.Right
-            : DockSide.None;
+        _settings.Dock = DockFor(Left, wa, ScreenAt(new Point(wa.Left - 1, Top + IslandSize / 2)), ScreenAt(new Point(wa.Right + 1, Top + IslandSize / 2)));
         Top = Math.Clamp(Top, wa.Top, wa.Bottom - IslandSize);
         Left = _settings.Dock switch
         {
@@ -103,6 +101,22 @@ public partial class IslandWindow : Window
         Left = _settings.Dock == DockSide.Left
             ? _dockArea.Left - (retracted ? IslandSize - TabWidth : 0)
             : _dockArea.Right - (retracted ? TabWidth : IslandSize);
+    }
+
+    /// <summary>
+    /// Aggancio solo ai bordi esterni del desktop: sul confine tra due monitor la parte "ritratta" finirebbe sull'altro
+    /// schermo, ancora visibile e sotto il mouse, e l'isola salterebbe avanti e indietro all'infinito.
+    /// </summary>
+    internal static DockSide DockFor(double left, Rect workArea, bool screenOnLeft, bool screenOnRight) =>
+        left < workArea.Left + SnapDistance && !screenOnLeft ? DockSide.Left
+        : left + IslandSize > workArea.Right - SnapDistance && !screenOnRight ? DockSide.Right
+        : DockSide.None;
+
+    bool ScreenAt(Point dip)
+    {
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var pixel = new System.Drawing.Point((int)(dip.X * dpi.DpiScaleX), (int)(dip.Y * dpi.DpiScaleY));
+        return System.Windows.Forms.Screen.AllScreens.Any(s => s.Bounds.Contains(pixel));
     }
 
     // shortcut: usa il DPI di questa finestra per tutti i monitor; impreciso con monitor a DPI diversi (M7)
