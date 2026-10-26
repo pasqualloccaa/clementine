@@ -265,3 +265,32 @@ public class ToolEngineTests
         Assert.Equal("640,360,25/1", Probe(gif, "stream=width,height,r_frame_rate"));
     }
 }
+
+public class ScreenRecorderTests
+{
+    static readonly string FfmpegDir = Path.Combine(AppContext.BaseDirectory, "tools", "ffmpeg");
+
+    // registra davvero 2 secondi del primo schermo: il file resta in una cartella temporanea e si cancella
+    [Fact]
+    public async Task Records_AndStopsWithAPlayableMp4()
+    {
+        using var dir = new TempDir();
+        var screens = ScreenRecorder.Screens();
+        Assert.NotEmpty(screens);
+        Assert.All(screens, s => Assert.True(s.Width > 0 && s.Height > 0));
+        var recorder = new ScreenRecorder(FfmpegDir);
+        var output = Path.Combine(dir.Path, "rec.mp4");
+
+        recorder.Start(screens[0], output, microphone: null);
+        Assert.True(recorder.IsRecording);
+        await Task.Delay(2500);
+        Assert.Equal(output, await recorder.StopAsync());
+
+        Assert.False(recorder.IsRecording);
+        var psi = new ProcessStartInfo(Path.Combine(FfmpegDir, "ffprobe.exe"), ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", output])
+            { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
+        using var p = Process.Start(psi)!;
+        var duration = double.Parse(p.StandardOutput.ReadToEnd().Trim(), System.Globalization.CultureInfo.InvariantCulture);
+        Assert.InRange(duration, 1.5, 4);
+    }
+}

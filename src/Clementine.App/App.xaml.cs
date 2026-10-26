@@ -19,6 +19,8 @@ public partial class App : Application
     readonly AppSettings _settings = AppSettings.Load();
     TrayIcon? _tray;
     Pipeline? _pipeline;
+    ScreenRecorder? _recorder;
+    IslandWindow? _island;
     SingleInstance? _instance;
     SettingsWindow? _settingsWindow;
     static readonly string LogFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Clementine", "logs");
@@ -67,8 +69,9 @@ public partial class App : Application
             new MagickEngine(exiftool), new FfmpegEngine(Path.Combine(tools, "ffmpeg")),
             new LibreOfficeEngine(LibreOfficeEngine.Find()), new PdfiumEngine(), new ArchiveEngine(), new MetadataEngine(exiftool),
         ]);
+        _recorder = new ScreenRecorder(Path.Combine(tools, "ffmpeg"));
         _tray = new TrayIcon(BuildMenu);
-        var island = new IslandWindow(_settings) { OperationsFor = RingsFor };
+        var island = _island = new IslandWindow(_settings) { OperationsFor = RingsFor };
 
         island.Clicked += () => _tray.ShowMenu(Forms.Cursor.Position);
         island.Dropped += (op, files) =>
@@ -116,6 +119,47 @@ public partial class App : Application
             else AddExternal(r);
         }));
         if (request is not null) AddExternal(request);
+    }
+
+    // ---- registrazione dello schermo ----
+
+    Forms.ToolStripMenuItem RecordMenu()
+    {
+        if (_recorder!.IsRecording)
+            return new Forms.ToolStripMenuItem("■ Ferma registrazione", null, async (_, _) => await StopRecordingAsync());
+        var menu = new Forms.ToolStripMenuItem("Registra schermo");
+        var screens = ScreenRecorder.Screens();
+        for (var i = 0; i < screens.Count; i++)
+        {
+            var screen = screens[i];
+            menu.DropDownItems.Add($"Schermo {i + 1} ({screen.Width}×{screen.Height})", null, (_, _) => StartRecording(screen));
+        }
+        menu.DropDownItems.Add(new Forms.ToolStripSeparator());
+        menu.DropDownItems.Add(new Forms.ToolStripMenuItem("Con il microfono", null, (_, _) =>
+        {
+            _settings.RecordMicrophone = !_settings.RecordMicrophone;
+            _settings.Save();
+        }) { Checked = _settings.RecordMicrophone });
+        return menu;
+    }
+
+    void StartRecording(System.Drawing.Rectangle screen)
+    {
+        var videos = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+        var output = OutputPath.Next(Path.Combine(videos, $"Registrazione {DateTime.Now:yyyy-MM-dd HH.mm.ss}.mp4"), "mp4");
+        var microphone = _settings.RecordMicrophone ? _recorder!.Microphone() : null;
+        if (_settings.RecordMicrophone && microphone is null) Toast(() => JobToasts.Info("Nessun microfono", "Registro solo lo schermo."));
+        _recorder!.Start(screen, output, microphone);
+        Log.Information("Registrazione di {Screen} in {Output}", screen, output);
+        _island!.SetRecording(true);
+    }
+
+    async Task StopRecordingAsync()
+    {
+        var output = await _recorder!.StopAsync();
+        _island!.SetRecording(false);
+        if (output is null) Toast(() => JobToasts.Info("Registrazione non riuscita", "Il video non è stato salvato."));
+        else Toast(() => JobToasts.Info("Registrazione salvata", Path.GetFileName(output), select: output));
     }
 
     // ---- installazione (vedi SelfInstall) ----
@@ -196,6 +240,8 @@ public partial class App : Application
 
     void BuildMenu(Forms.ToolStripItemCollection items)
     {
+        items.Add(RecordMenu());
+        items.Add(new Forms.ToolStripSeparator());
         var queue = _pipeline!.Queue;
         for (var i = 0; i < queue.Count; i++)
         {
@@ -296,6 +342,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _recorder?.StopAsync().Wait(TimeSpan.FromSeconds(15)); // un MP4 chiuso a metà non si apre
         _pipeline?.Dispose();
         _tray?.Dispose();
         _instance?.Dispose();

@@ -33,7 +33,9 @@ public partial class IslandWindow : Window
     IReadOnlyList<Operation> _ops = [];
     Ring _ring, _manualRing;
     Rect _dockArea;
-    bool _wheelOpen, _working;
+    bool _wheelOpen, _working, _recording;
+    double _progress;
+    static readonly Brush RecordingBrush = Frozen(Color.FromRgb(0xE5, 0x39, 0x35));
     int _hot = -1;
     Brush _sliceBrush = DarkSlice, _labelBrush = Brushes.White;
 
@@ -102,7 +104,7 @@ public partial class IslandWindow : Window
 
     void SetRetracted(bool retracted)
     {
-        if (_wheelOpen || _settings.Dock == DockSide.None || (retracted && _working)) return;
+        if (_wheelOpen || _settings.Dock == DockSide.None || (retracted && (_working || _recording))) return;
         Slide(_settings.Dock == DockSide.Left
             ? _dockArea.Left - (retracted ? IslandSize - TabWidth : 0)
             : _dockArea.Right - (retracted ? TabWidth : IslandSize));
@@ -156,12 +158,26 @@ public partial class IslandWindow : Window
     public void SetProgress(double? value)
     {
         _working = value is not null;
-        ProgressRing.Visibility = _working ? Visibility.Visible : Visibility.Collapsed;
+        _progress = value ?? 0;
+        DrawRing();
+    }
+
+    /// <summary>Anello rosso pieno mentre si registra lo schermo (sotto l'avanzamento, se intanto si converte).</summary>
+    public void SetRecording(bool recording)
+    {
+        _recording = recording;
+        DrawRing();
+    }
+
+    void DrawRing()
+    {
+        ProgressRing.Visibility = _working || _recording ? Visibility.Visible : Visibility.Collapsed;
+        ProgressRing.Stroke = _working ? Brushes.White : RecordingBrush;
         // tratto in unità di StrokeThickness: circonferenza della linea centrale / spessore (anello di 50 px, Margin 3)
         var t = ProgressRing.StrokeThickness;
         var circumference = Math.PI * (IslandSize - 2 * ProgressRing.Margin.Left - t) / t;
-        ProgressRing.StrokeDashArray = [Math.Max(value ?? 0, 0.001) * circumference, circumference];
-        SetRetracted(!_working && !IsMouseOver);
+        ProgressRing.StrokeDashArray = [Math.Max(_working ? _progress : 1, 0.001) * circumference, circumference];
+        SetRetracted(!_working && !_recording && !IsMouseOver);
     }
 
     // ---- ruota ----
