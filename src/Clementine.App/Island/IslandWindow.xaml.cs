@@ -82,7 +82,7 @@ public partial class IslandWindow : Window
     {
         _dockArea = WorkAreaAt(new Point(Left + IslandSize / 2, Top + IslandSize / 2));
         var wa = _dockArea;
-        _settings.Dock = DockFor(Left, wa, ScreenAt(new Point(wa.Left - 1, Top + IslandSize / 2)), ScreenAt(new Point(wa.Right + 1, Top + IslandSize / 2)));
+        _settings.Dock = DockFor(Left, wa, ScreenBeside(DockSide.Left), ScreenBeside(DockSide.Right));
         Top = Math.Clamp(Top, wa.Top, wa.Bottom - IslandSize);
         Left = _settings.Dock switch
         {
@@ -112,11 +112,16 @@ public partial class IslandWindow : Window
         : left + IslandSize > workArea.Right - SnapDistance && !screenOnRight ? DockSide.Right
         : DockSide.None;
 
-    bool ScreenAt(Point dip)
+    // un altro monitor da quel lato, alla stessa altezza; non "il pixel subito oltre il bordo": con monitor a scale
+    // diverse (125% e 100%) Windows lascia un buco tra le loro coordinate e quel pixel non è di nessuno schermo
+    bool ScreenBeside(DockSide side)
     {
         var dpi = VisualTreeHelper.GetDpi(this);
-        var pixel = new System.Drawing.Point((int)(dip.X * dpi.DpiScaleX), (int)(dip.Y * dpi.DpiScaleY));
-        return System.Windows.Forms.Screen.AllScreens.Any(s => s.Bounds.Contains(pixel));
+        var center = new System.Drawing.Point((int)((Left + IslandSize / 2) * dpi.DpiScaleX), (int)((Top + IslandSize / 2) * dpi.DpiScaleY));
+        var here = System.Windows.Forms.Screen.FromPoint(center).Bounds;
+        return System.Windows.Forms.Screen.AllScreens.Select(s => s.Bounds).Any(b => b != here
+            && b.Top <= center.Y && center.Y < b.Bottom
+            && (side == DockSide.Right ? b.Left >= here.Right : b.Right <= here.Left));
     }
 
     // shortcut: usa il DPI di questa finestra per tutti i monitor; impreciso con monitor a DPI diversi (M7)
