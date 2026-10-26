@@ -22,6 +22,7 @@ public sealed class FfmpegEngine(string ffmpegDir) : IEngine
         string[] codec = job.Op.Id switch
         {
             "tool:compress-video" => Compress,
+            "tool:web" => Web,
             // loudnorm lavora a 192 kHz: si torna a 48 kHz, che vale per tutti i formati di uscita
             "tool:normalize" => ["-af", "loudnorm=I=-16:TP=-1.5:LRA=11", "-ar", "48000", .. CodecArgs(ext)],
             "tool:mono" => ["-ac", "1", .. CodecArgs(ext)],
@@ -50,7 +51,8 @@ public sealed class FfmpegEngine(string ffmpegDir) : IEngine
         "webm" => ["-c:v", "libvpx-vp9", "-crf", "32", "-b:v", "0", "-row-mt", "1", "-c:a", "libopus", "-b:a", "128k"],
         "avi" => ["-c:v", "mpeg4", "-q:v", "3", "-c:a", "libmp3lame", "-q:a", "4"],
         "wmv" => ["-c:v", "wmv2", "-q:v", "3", "-c:a", "wmav2", "-b:a", "192k"],
-        "gif" => ["-an", "-loop", "0", "-vf", "fps=12,scale='min(480,iw)':-2:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse"],
+        // 20 fotogrammi al secondo e 640 px: a 12 fps e 480 px il movimento scattava; palette ricalcolata solo sulle parti che cambiano
+        "gif" => ["-an", "-loop", "0", "-vf", "fps=20,scale='min(640,iw)':-2:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=sierra2_4a:diff_mode=rectangle"],
         "mp3" => ["-vn", "-c:a", "libmp3lame", "-q:a", "2"],
         "m4a" => ["-vn", "-c:a", "aac", "-b:a", "192k"],
         "wav" => ["-vn", "-c:a", "pcm_s16le"],
@@ -65,6 +67,10 @@ public sealed class FfmpegEngine(string ffmpegDir) : IEngine
     // H.264 più compresso, al massimo 1080p di larghezza 1920
     static readonly string[] Compress = ["-c:v", "libx264", "-crf", "28", "-preset", "medium", "-pix_fmt", "yuv420p",
         "-vf", @"scale=trunc(min(1920\,iw)/2)*2:-2", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart"];
+
+    // preset "Per il web": 1280 px, più compresso, senza metadati, riproducibile mentre si scarica
+    static readonly string[] Web = ["-map_metadata", "-1", "-c:v", "libx264", "-crf", "26", "-preset", "medium", "-pix_fmt", "yuv420p",
+        "-vf", @"scale=trunc(min(1280\,iw)/2)*2:-2", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart"];
 
     static readonly string[] H264 =["-c:v", "libx264", "-crf", "23", "-preset", "medium", "-pix_fmt", "yuv420p",
         "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-c:a", "aac", "-b:a", "160k"];

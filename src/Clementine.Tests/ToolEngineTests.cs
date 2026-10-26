@@ -159,4 +159,48 @@ public class ToolEngineTests
         await engine.RunAsync(new Job(wav, Tool(wav, "tool:normalize"), normalized), NoProgress, default);
         Assert.Equal("48000", Probe(normalized, "stream=sample_rate"));
     }
+
+    // preset "Per il web": foto 4000 px → WebP 1920 px senza metadati; una piccola non si ingrandisce
+    [Fact]
+    public async Task Magick_Web_ShrinksAndStrips()
+    {
+        using var dir = new TempDir();
+        var big = Path.Combine(dir.Path, "big.jpg");
+        using (var image = new MagickImage(MagickColors.Orange, 4000, 3000))
+        {
+            var exif = new ExifProfile();
+            exif.SetValue(ExifTag.Artist, "Clementine Test");
+            image.SetProfile(exif);
+            image.Write(big);
+        }
+        var small = Path.Combine(dir.Path, "small.png");
+        new MagickImage(MagickColors.Green, 300, 200).Write(small);
+
+        var bigWeb = Path.Combine(dir.Path, "big.webp");
+        var smallWeb = Path.Combine(dir.Path, "small.webp");
+        await new MagickEngine().RunAsync(new Job(big, Tool(big, "tool:web"), bigWeb), NoProgress, default);
+        await new MagickEngine().RunAsync(new Job(small, Tool(small, "tool:web"), smallWeb), NoProgress, default);
+
+        using var result = new MagickImage(bigWeb);
+        Assert.Equal((MagickFormat.WebP, 1920u, 1440u), (result.Format, result.Width, result.Height));
+        Assert.Null(result.GetExifProfile());
+        using var kept = new MagickImage(smallWeb);
+        Assert.Equal((300u, 200u), (kept.Width, kept.Height));
+    }
+
+    [Fact]
+    public async Task Ffmpeg_WebPreset_AndSmootherGif()
+    {
+        using var dir = new TempDir();
+        var mov = MakeMedia(dir, "a.mov", "-f", "lavfi", "-i", "testsrc=duration=2:size=1920x1080:rate=30");
+        var engine = new FfmpegEngine(FfmpegDir);
+
+        var web = Path.Combine(dir.Path, "web.mp4");
+        await engine.RunAsync(new Job(mov, Tool(mov, "tool:web"), web), NoProgress, default);
+        Assert.Equal("1280,720", Probe(web, "stream=width,height"));
+
+        var gif = Path.Combine(dir.Path, "a.gif");
+        await engine.RunAsync(new Job(mov, Formats.ConversionsFor(mov).Single(o => o.TargetExtension == "gif"), gif), NoProgress, default);
+        Assert.Equal("640,360,20/1", Probe(gif, "stream=width,height,r_frame_rate"));
+    }
 }

@@ -23,6 +23,7 @@ public static class Toolbox
                         tools.Add(new("tool:compress", "Comprimi", kind, null, "compresso"));
                     tools.Add(new("tool:resize50", "Riduci 50%", kind, null, "50%"));
                     tools.Add(new("tool:rotate90", "Ruota 90°", kind, null, "ruotata"));
+                    tools.Add(new("tool:web", "Per il web", kind, "webp", "web"));
                     tools.Add(ImagesToPdf);
                     break;
                 case FileKind.Image:
@@ -30,6 +31,7 @@ public static class Toolbox
                     break;
                 case FileKind.Video:
                     tools.Add(new("tool:compress-video", "Comprimi", kind, "mp4", "compresso"));
+                    tools.Add(new("tool:web", "Per il web", kind, "mp4", "web"));
                     tools.Add(new("tool:extract-audio", "Estrai audio", kind, "m4a"));
                     tools.Add(new("tool:frames", "Fotogrammi", kind, "jpg", "fotogrammi"));
                     break;

@@ -14,7 +14,7 @@ public sealed class MagickEngine(string? exiftool = null) : IEngine
     static readonly Lazy<bool> HeifEncoder = new(() =>
         BitmapEncoder.GetEncoderInformationEnumerator().Any(i => i.CodecId == BitmapEncoder.HeifEncoderId));
 
-    static readonly string[] Tools = ["tool:compress", "tool:resize50", "tool:rotate90", Toolbox.ImagesToPdf.Id];
+    static readonly string[] Tools = ["tool:compress", "tool:resize50", "tool:rotate90", "tool:web", Toolbox.ImagesToPdf.Id];
 
     public bool CanHandle(Operation op) => op.Kind == FileKind.Image &&
         (op.Id.StartsWith("convert:") ? op.TargetExtension != "heic" || HeifEncoder.Value : Tools.Contains(op.Id));
@@ -32,10 +32,15 @@ public sealed class MagickEngine(string? exiftool = null) : IEngine
         ct.ThrowIfCancellationRequested();
         if (job.Op.Id == "tool:resize50") image.Resize(new Percentage(50));
         if (job.Op.Id == "tool:rotate90") image.Rotate(90);
+        if (job.Op.Id == "tool:web") // preset: lato lungo al massimo 1920 px (mai ingrandita), niente metadati né GPS
+        {
+            image.Resize(new MagickGeometry(1920, 1920) { Greater = true });
+            image.Strip();
+        }
 
         var target = Formats.Extension(job.Output);
         if (target is "jpg" or "bmp" or "heic") Flatten(image);
-        if (target is "jpg" or "webp" or "avif") image.Quality = job.Op.Id == "tool:compress" ? 70u : 90u;
+        if (target is "jpg" or "webp" or "avif") image.Quality = job.Op.Id switch { "tool:compress" => 70u, "tool:web" => 80u, _ => 90u };
         if (target == "jpg")
         {
             // con qualità >= 90 ImageMagick passerebbe a 4:4:4 + Huffman ottimizzato: scrittura 2-3x più lenta
