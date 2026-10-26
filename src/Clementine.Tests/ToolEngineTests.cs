@@ -201,6 +201,6 @@ public class ToolEngineTests
 
         var gif = Path.Combine(dir.Path, "a.gif");
         await engine.RunAsync(new Job(mov, Formats.ConversionsFor(mov).Single(o => o.TargetExtension == "gif"), gif), NoProgress, default);
-        Assert.Equal("640,360,20/1", Probe(gif, "stream=width,height,r_frame_rate"));
+        Assert.Equal("640,360,25/1", Probe(gif, "stream=width,height,r_frame_rate"));
     }
 }

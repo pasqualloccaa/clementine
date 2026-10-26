@@ -33,7 +33,7 @@ e dal menu contestuale di Esplora file.
    - `Ctrl` → **Strumenti** (comprimi, ritaglia, unisci, metadati…)
    - `Alt` → **Azioni** (copia in…, sposta in…, copia percorso, apri terminale, condividi)
    - anelli raggiungibili anche senza tastiera: un'icona al centro della ruota li cicla
-     fermandosi sopra ~800 ms (400 ms provato: troppo rapido).
+     fermandosi sopra 1,5 s (400 e 800 ms provati: troppo rapidi).
 4. Lo spicchio sotto il cursore si evidenzia subito (`DragOver`, nessun ritardo
    percepibile); gli spicchi non applicabili sono assenti, non disabilitati.
 5. **Rilascio sullo spicchio** (`Drop`) → l'operazione parte in locale. Se il cursore esce
@@ -156,7 +156,7 @@ Copia in…, Sposta in…, Copia percorso, Apri terminale qui, Condividi (Nearby
 5. **Clic destro in Esplora file** (registro + named pipe verso l'istanza aperta).
 6. **LibreOffice** per documenti Office, impostazioni UI, avvio automatico, installer (Inno Setup o MSIX).
 7. Rifinitura: animazioni, tema chiaro/scuro, preset ("web-optimized"), onboarding al primo avvio.
-   Fatto: GIF 20 fps/640 px, strumento "Per il web" (immagini → WebP 1920 px, video → MP4 1280 px, senza metadati),
+   Fatto: GIF 25 fps/640 px, strumento "Per il web" (immagini → WebP 1920 px, video → MP4 1280 px, senza metadati),
    icona vera (`Assets/clementine.svg` → `installer/make-icon.ps1`), tema dalla modalità app di Windows (ruota, menu,
    finestre), isola che scivola sul bordo, benvenuto al primo avvio e da "Come si usa".
 

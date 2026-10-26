@@ -51,8 +51,8 @@ public sealed class FfmpegEngine(string ffmpegDir) : IEngine
         "webm" => ["-c:v", "libvpx-vp9", "-crf", "32", "-b:v", "0", "-row-mt", "1", "-c:a", "libopus", "-b:a", "128k"],
         "avi" => ["-c:v", "mpeg4", "-q:v", "3", "-c:a", "libmp3lame", "-q:a", "4"],
         "wmv" => ["-c:v", "wmv2", "-q:v", "3", "-c:a", "wmav2", "-b:a", "192k"],
-        // 20 fotogrammi al secondo e 640 px: a 12 fps e 480 px il movimento scattava; palette ricalcolata solo sulle parti che cambiano
-        "gif" => ["-an", "-loop", "0", "-vf", "fps=20,scale='min(640,iw)':-2:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=sierra2_4a:diff_mode=rectangle"],
+        // 25 fotogrammi al secondo e 640 px: a 12 fps scattava, a 20 non ancora fluida; palette ricalcolata solo sulle parti che cambiano
+        "gif" => ["-an", "-loop", "0", "-vf", "fps=25,scale='min(640,iw)':-2:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=sierra2_4a:diff_mode=rectangle"],
         "mp3" => ["-vn", "-c:a", "libmp3lame", "-q:a", "2"],
         "m4a" => ["-vn", "-c:a", "aac", "-b:a", "192k"],
         "wav" => ["-vn", "-c:a", "pcm_s16le"],

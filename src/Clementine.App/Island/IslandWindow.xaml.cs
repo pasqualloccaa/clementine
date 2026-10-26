@@ -28,7 +28,7 @@ public partial class IslandWindow : Window
     readonly List<Path> _slices = [];
     readonly List<UIElement> _wheelItems = [];
     static readonly string[] RingNames = ["Converti", "Strumenti", "Azioni"];
-    readonly HubDwell _hub = new(TimeSpan.FromMilliseconds(800)); // 400 ms era troppo rapido all'uso
+    readonly HubDwell _hub = new(TimeSpan.FromMilliseconds(1500)); // provati 400 e 800 ms: troppo rapidi all'uso
     IReadOnlyList<Operation>[] _rings = [];
     IReadOnlyList<Operation> _ops = [];
     Ring _ring, _manualRing;
