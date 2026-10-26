@@ -15,6 +15,7 @@ public static class Formats
         [FileKind.Video] = (["mp4", "mov", "mkv", "webm", "avi", "wmv", "gif"], ["mp4", "mov", "mkv", "webm", "avi", "wmv", "gif"]),
         [FileKind.Pdf] = (["pdf"], ["docx", "txt", "md", "jpg", "png"]),
         [FileKind.Archive] = (["zip", "tar", "tar.gz", "gz", "rar"], ["zip", "tar", "tar.gz"]),
+        [FileKind.Subtitle] = (["srt", "vtt"], ["srt", "vtt"]),
     };
 
     static readonly Dictionary<string, string> Aliases = new()

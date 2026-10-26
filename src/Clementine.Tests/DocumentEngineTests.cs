@@ -123,6 +123,59 @@ public class ArchiveEngineTests
     }
 }
 
+public class SubtitleEngineTests
+{
+    static Operation Op(string ext) => new($"convert:{ext}", ext.ToUpperInvariant(), FileKind.Subtitle, ext);
+
+    static async Task<string> Convert(TempDir dir, string name, byte[] content, string target)
+    {
+        var input = Path.Combine(dir.Path, name);
+        File.WriteAllBytes(input, content);
+        var output = Path.Combine(dir.Path, $"out.{target}");
+        await new SubtitleEngine().RunAsync(new Job(input, Op(target), output), new Progress<double>(), default);
+        return File.ReadAllText(output, Encoding.UTF8);
+    }
+
+    [Fact]
+    public async Task Srt_InWindows1252_BecomesVtt()
+    {
+        using var dir = new TempDir();
+        var srt = "1\r\n00:00:01,000 --> 00:00:02,500\r\nPerché l’hai fatto?\r\n\r\n" +
+                  "2\r\n01:02:03,040 --> 01:02:04,000\r\n<font color=\"#ffff00\"><i>Città</i></font>\r\nseconda riga\r\n\r\n";
+
+        var vtt = await Convert(dir, "a.srt", CodePagesEncodingProvider.Instance.GetEncoding(1252)!.GetBytes(srt), "vtt");
+
+        Assert.Equal("WEBVTT\n\n00:00:01.000 --> 00:00:02.500\nPerché l’hai fatto?\n\n" +
+                     "01:02:03.040 --> 01:02:04.000\n<i>Città</i>\nseconda riga\n\n", vtt);
+    }
+
+    [Fact]
+    public async Task Vtt_WithHeaderNotesAndSettings_BecomesNumberedSrt()
+    {
+        using var dir = new TempDir();
+        var vtt = "﻿WEBVTT - prova\n\nNOTE commento\nsu due righe\n\nSTYLE\n::cue { color: yellow }\n\n" +
+                  "saluto\n00:01.000 --> 00:02.000 align:start position:10%\n<v Anna>Ciao</v> <c.rosso>a tutti</c>\n\n" +
+                  "1:00:00.5 --> 1:00:01.250\n<b>Fine</b>\n";
+
+        var srt = await Convert(dir, "a.vtt", Encoding.UTF8.GetBytes(vtt), "srt");
+
+        Assert.Equal("1\r\n00:00:01,000 --> 00:00:02,000\r\nCiao a tutti\r\n\r\n" +
+                     "2\r\n01:00:00,500 --> 01:00:01,250\r\n<b>Fine</b>\r\n\r\n", srt);
+    }
+
+    [Fact]
+    public async Task FileWithoutCues_Fails() =>
+        await Assert.ThrowsAsync<InvalidDataException>(async () =>
+        {
+            using var dir = new TempDir();
+            await Convert(dir, "vuoto.srt", Encoding.UTF8.GetBytes("non sono sottotitoli"), "vtt");
+        });
+
+    [Fact]
+    public void Ring_OffersTheOtherFormat() =>
+        Assert.Equal(["convert:vtt"], Formats.ConversionsFor("film.srt").Select(o => o.Id));
+}
+
 public class MetadataEngineTests
 {
     internal static readonly string Exiftool = Path.Combine(AppContext.BaseDirectory, "tools", "exiftool", "exiftool.exe");

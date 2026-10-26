@@ -68,7 +68,7 @@ public partial class App : Application
         var exiftool = Exiftool;
         _pipeline = new Pipeline([
             new MagickEngine(exiftool), new FfmpegEngine(Path.Combine(tools, "ffmpeg")),
-            new LibreOfficeEngine(LibreOfficeEngine.Find()), new PdfiumEngine(), new ArchiveEngine(), new MetadataEngine(exiftool),
+            new LibreOfficeEngine(LibreOfficeEngine.Find()), new PdfiumEngine(), new ArchiveEngine(), new MetadataEngine(exiftool), new SubtitleEngine(),
         ]);
         _recorder = new ScreenRecorder(Path.Combine(tools, "ffmpeg"));
         _tray = new TrayIcon(BuildMenu);
