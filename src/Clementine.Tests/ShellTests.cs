@@ -172,3 +172,50 @@ public class AutostartTests : IDisposable
         Assert.Null(_run.GetValue("Clementine"));
     }
 }
+
+public class SelfInstallTests : IDisposable
+{
+    readonly TempDir _dir = new();
+    readonly string _root = $@"Software\Clementine.Tests\{Guid.NewGuid():N}";
+    readonly RegistryKey _hkcu;
+
+    public SelfInstallTests() => _hkcu = Registry.CurrentUser.CreateSubKey(_root);
+
+    public void Dispose()
+    {
+        _hkcu.Dispose();
+        Registry.CurrentUser.DeleteSubKeyTree(_root, throwOnMissingSubKey: false);
+        _dir.Dispose();
+    }
+
+    [Fact]
+    public void Install_CopiesTree_ReplacesOldVersion_AndRegistersUninstall()
+    {
+        var source = Directory.CreateDirectory(Path.Combine(_dir.Path, "build")).FullName;
+        File.Copy(Environment.ProcessPath!, Path.Combine(source, "Clementine.App.exe")); // un exe vero: serve la versione
+        Directory.CreateDirectory(Path.Combine(source, "tools"));
+        File.WriteAllText(Path.Combine(source, "tools", "ffmpeg.exe"), "nuovo");
+        var target = Directory.CreateDirectory(Path.Combine(_dir.Path, "Programs", "Clementine")).FullName;
+        File.WriteAllText(Path.Combine(target, "Clementine.App.exe"), "vecchio");
+        File.WriteAllText(Path.Combine(target, "residuo.dll"), "di una versione precedente");
+
+        var exe = SelfInstall.Install(source, target, _hkcu);
+
+        Assert.Equal(Path.Combine(target, "Clementine.App.exe"), exe);
+        Assert.Equal("nuovo", File.ReadAllText(Path.Combine(target, "tools", "ffmpeg.exe")));
+        Assert.False(File.Exists(Path.Combine(target, "residuo.dll")));
+        using var key = _hkcu.OpenSubKey(SelfInstall.UninstallKey)!;
+        Assert.Equal($"\"{exe}\" --uninstall", key.GetValue("UninstallString"));
+        Assert.Equal("Clementine", key.GetValue("DisplayName"));
+    }
+
+    [Fact]
+    public void FolderRemoval_OnlyForAClementineInstall()
+    {
+        var other = Directory.CreateDirectory(Path.Combine(_dir.Path, "Documenti")).FullName;
+        File.WriteAllText(Path.Combine(other, "tesi.docx"), "x");
+        SelfInstall.RemoveFolderAfterExit(other); // non è un'installazione: non parte nessuna cancellazione
+        Thread.Sleep(3500);
+        Assert.True(File.Exists(Path.Combine(other, "tesi.docx")));
+    }
+}

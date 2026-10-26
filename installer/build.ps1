@@ -1,15 +1,16 @@
-# Pubblica Clementine (autonoma: non serve .NET installato) e compila l'installer in .build\installer\Clementine-Setup.exe
+# Pubblica Clementine (autonoma: non serve .NET installato) in .build\Clementine, con "Installa Clementine.cmd".
+# Niente Setup.exe: Clementine si installa da sé (Shell\SelfInstall.cs), perché Smart App Control blocca
+# l'eseguibile temporaneo non firmato di Inno Setup.
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot
 $dotnet = (Get-Command dotnet -ErrorAction SilentlyContinue).Source
 if (Test-Path "$env:USERPROFILE\.dotnet\dotnet.exe") { $dotnet = "$env:USERPROFILE\.dotnet\dotnet.exe" } # l'SDK sta qui su questo PC
-$iscc = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
-if (-not $iscc) { throw 'Inno Setup 6 non trovato: winget install JRSoftware.InnoSetup --scope user' }
+$out = "$root\.build\Clementine"
 
-Remove-Item "$root\.build\publish" -Recurse -Force -ErrorAction SilentlyContinue
-# Deterministic=false: binari nuovi a ogni build (Smart App Control a volte blocca un hash e non quello dopo)
-& $dotnet publish "$root\src\Clementine.App" -c Release -r win-x64 --self-contained true -p:Deterministic=false -o "$root\.build\publish" -nologo -v q
+Remove-Item $out -Recurse -Force -ErrorAction SilentlyContinue
+# un solo exe con dentro tutte le nostre DLL: Smart App Control blocca le DLL appena compilate, l'exe no.
+# Le DLL native di terze parti (Magick, PDFium, WPF) restano file a parte: sono note e firmate.
+& $dotnet publish "$root\src\Clementine.App" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:Deterministic=false -o $out -nologo -v q
 if ($LASTEXITCODE) { throw 'publish fallito' }
-& $iscc /Q "$PSScriptRoot\Clementine.iss"
-if ($LASTEXITCODE) { throw 'Inno Setup fallito' }
-Get-Item "$root\.build\installer\Clementine-Setup.exe"
+Set-Content "$out\Installa Clementine.cmd" '@start "" "%~dp0Clementine.App.exe" --install' -Encoding ascii
+Get-Item "$out\Installa Clementine.cmd"

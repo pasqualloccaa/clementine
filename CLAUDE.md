@@ -102,7 +102,7 @@ Clementine/
 - libvips precompilato (NetVips.Native) non legge HEIC né BMP; ImageMagick (Magick.NET) legge tutto ma
   nessuno dei due scrive HEIC (encoder HEVC escluso per brevetti). HEIC in uscita usa l'encoder di Windows
   (estensioni Store "HEIF Image" + "HEVC Video"): se manca, lo spicchio HEIC non compare.
-- Smart App Control può bloccare DLL/exe nuovi non firmati (errore 0x800711C7) e rallenta il primo avvio.
+- Smart App Control bloccava DLL/exe nuovi non firmati (errore 0x800711C7), dal 26/10/2026 anche a ogni build: disattivato sul PC di sviluppo.
 - ExifTool (Perl) scrive nei HEIC dell'encoder di Windows solo con ordine degli hash fisso
   (`PERL_HASH_SEED=0`, impostato in `ProcessRunner`): senza, fallisce a caso (~60%).
 - PDF: rendering e testo con PDFium (Docnet.Core); PDF a più pagine → cartella "nome (PNG)" con un'immagine per pagina.
@@ -142,9 +142,9 @@ Copia in…, Sposta in…, Copia percorso, Apri terminale qui, Condividi (Nearby
 - Ogni engine implementa `IEngine { bool CanHandle(Operation); Task RunAsync(Job, IProgress<double>, CancellationToken); }`.
 - Niente servizi cloud, niente API a pagamento, niente telemetria.
 - I binari esterni stanno in `tools/` e vengono scaricati da `tools/get-tools.ps1` (ffmpeg, exiftool); LibreOffice è opzionale e rilevato se installato.
-- Installer: `installer/build.ps1` (publish autonomo win-x64 + Inno Setup 6) → `.build/installer/Clementine-Setup.exe`.
-  Per utente, senza admin, in `%LOCALAPPDATA%\Programs\Clementine`. Aggiornamento e disinstallazione chiudono l'app con
-  `--quit` / `--unregister` (Windows non sa chiudere da sé un'app senza finestre normali).
+- Installazione: `installer/build.ps1` pubblica un exe unico autonomo in `.build/Clementine` con "Installa Clementine.cmd"
+  (`--install`): Clementine si copia da sé in `%LOCALAPPDATA%\Programs\Clementine`, menu Start, "Programmi installati"
+  (`--uninstall`). Niente Inno Setup: Smart App Control bloccava il suo eseguibile temporaneo non firmato.
 - Log in `%APPDATA%\Clementine\logs\` con Serilog.
 - UI in italiano e inglese (resx).
 

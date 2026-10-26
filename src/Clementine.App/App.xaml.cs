@@ -30,15 +30,16 @@ public partial class App : Application
     {
         base.OnStartup(e);
         AttachConsole(-1); // WinExe: fa arrivare Console.WriteLine al terminale da cui è stata lanciata
-        if (e.Args is ["--quit"] or ["--unregister"]) // per installer e disinstallazione
+        if (e.Args is ["--install"] or ["--uninstall"])
         {
-            // prima si chiude quella aperta: appena avviata potrebbe riscrivere il menu dopo che l'abbiamo tolto
-            SingleInstance.Quit(SingleInstance.DefaultName);
-            if (e.Args[0] == "--unregister") // niente resta nel registro
+            try
             {
-                ContextMenu.Unregister(Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Classes"));
-                using var run = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(Autostart.RunKey);
-                Autostart.Set(run, Environment.ProcessPath!, false);
+                if (e.Args[0] == "--install") Install();
+                else Uninstall();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                MessageBox.Show(ex.Message, "Clementine", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             Shutdown();
             return;
@@ -109,6 +110,33 @@ public partial class App : Application
             else AddExternal(r);
         }));
         if (request is not null) AddExternal(request);
+    }
+
+    // ---- installazione (vedi SelfInstall) ----
+
+    static void Install()
+    {
+        var answer = MessageBox.Show($"Clementine verrà installata in\n{SelfInstall.DefaultDir}\n\nVuoi che parta all'accensione del computer?",
+            "Installa Clementine", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+        if (answer == MessageBoxResult.Cancel) return;
+        SingleInstance.Quit(SingleInstance.DefaultName); // una versione aperta va chiusa prima di sostituirne i file
+        var exe = SelfInstall.Install(AppContext.BaseDirectory, SelfInstall.DefaultDir, Microsoft.Win32.Registry.CurrentUser);
+        SelfInstall.CreateShortcut(exe);
+        using (var run = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(Autostart.RunKey)) Autostart.Set(run, exe, answer == MessageBoxResult.Yes);
+        Process.Start(exe);
+    }
+
+    static void Uninstall()
+    {
+        if (MessageBox.Show("Disinstallare Clementine?\n\nImpostazioni e log in %APPDATA%\\Clementine restano.", "Clementine",
+                MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        // prima si chiude quella aperta: appena avviata potrebbe riscrivere il menu dopo che l'abbiamo tolto
+        SingleInstance.Quit(SingleInstance.DefaultName);
+        var hkcu = Microsoft.Win32.Registry.CurrentUser;
+        using (var classes = hkcu.CreateSubKey(@"Software\Classes")) ContextMenu.Unregister(classes);
+        using (var run = hkcu.CreateSubKey(Autostart.RunKey)) Autostart.Set(run, Environment.ProcessPath!, false);
+        SelfInstall.Uninstall(hkcu);
+        SelfInstall.RemoveFolderAfterExit(SelfInstall.DefaultDir);
     }
 
     /// <summary>Drop sulla ruota o richiesta dal menu di Esplora file: azioni subito, il resto in coda.</summary>
