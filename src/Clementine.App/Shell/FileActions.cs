@@ -53,6 +53,19 @@ static class FileActions
                     }
                     break;
 
+                case "action:read-qr":
+                    var texts = await Task.Run(() => paths.SelectMany(Clementine.Engines.QrReader.Read).Distinct().ToArray());
+                    if (texts.Length == 0)
+                    {
+                        JobToasts.Info("Nessun QR trovato", "Prova con un'immagine più nitida o più grande.");
+                        break;
+                    }
+                    // negli appunti e basta: un link da un QR sconosciuto non si apre da solo
+                    System.Windows.Clipboard.SetText(string.Join(Environment.NewLine, texts));
+                    var shown = string.Join("\n", texts);
+                    JobToasts.Info("QR copiato negli appunti", shown.Length > 300 ? shown[..300] + "…" : shown);
+                    break;
+
                 case "action:new-folder":
                     var folder = OutputPath.Free(Path.Combine(Path.GetDirectoryName(paths[0])!, "Nuova cartella"), isFolder: true);
                     Directory.CreateDirectory(folder);

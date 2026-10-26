@@ -20,7 +20,7 @@ public partial class ArgumentDialog : Window
     }
 
     /// <summary>L'operazione con il valore scelto, oppure null se l'utente annulla.</summary>
-    public static Operation? Ask(Operation op, IReadOnlyList<string> files)
+    public static Operation? Ask(Operation op, IReadOnlyList<string> files, string exiftool)
     {
         var value = op.Id switch
         {
@@ -32,6 +32,7 @@ public partial class ArgumentDialog : Window
             "tool:crop" => Choice("Ritaglia", "Quali proporzioni? Si tiene la parte centrale.",
                 [("1:1 quadrato", "1:1"), ("4:3", "4:3"), ("3:2", "3:2"), ("16:9", "16:9"), ("9:16 verticale", "9:16")]),
             "tool:pages" => Pages(files),
+            "metadata:edit" => MetadataDialog.Ask(files, exiftool),
             _ => throw new ArgumentException($"{op.Id} non chiede parametri"),
         };
         return value is null ? null : op with { Argument = value };

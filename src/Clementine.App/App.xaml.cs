@@ -23,6 +23,7 @@ public partial class App : Application
     IslandWindow? _island;
     SingleInstance? _instance;
     SettingsWindow? _settingsWindow;
+    static string Exiftool => Path.Combine(AppContext.BaseDirectory, "tools", "exiftool", "exiftool.exe");
     static readonly string LogFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Clementine", "logs");
     // Esplora file lancia un processo per ogni file selezionato: le richieste ravvicinate diventano un solo lavoro
     readonly Dictionary<string, List<string>> _external = [];
@@ -64,7 +65,7 @@ public partial class App : Application
         JobToasts.Init(id => _pipeline?.Cancel(id), id => Dispatcher.BeginInvoke(() => FileActions.ShareFromToastAsync(id)));
 
         var tools = Path.Combine(AppContext.BaseDirectory, "tools");
-        var exiftool = Path.Combine(tools, "exiftool", "exiftool.exe");
+        var exiftool = Exiftool;
         _pipeline = new Pipeline([
             new MagickEngine(exiftool), new FfmpegEngine(Path.Combine(tools, "ffmpeg")),
             new LibreOfficeEngine(LibreOfficeEngine.Find()), new PdfiumEngine(), new ArchiveEngine(), new MetadataEngine(exiftool),
@@ -195,7 +196,7 @@ public partial class App : Application
         if (op.Id == "action:share") FileActions.Share(files); // va chiamata subito: è il momento in cui si ha il primo piano
         else if (Toolbox.IsAction(op)) Dispatcher.BeginInvoke(() => FileActions.RunAsync(op, files));
         // la finestra si apre dopo il Drop: dentro, Esplora file resterebbe bloccato finché non si chiude
-        else if (Toolbox.AsksArgument(op)) Dispatcher.BeginInvoke(() => { if (ArgumentDialog.Ask(op, files) is { } chosen) Enqueue(files, chosen); });
+        else if (Toolbox.AsksArgument(op)) Dispatcher.BeginInvoke(() => { if (ArgumentDialog.Ask(op, files, Exiftool) is { } chosen) Enqueue(files, chosen); });
         else Enqueue(files, op);
     }
 

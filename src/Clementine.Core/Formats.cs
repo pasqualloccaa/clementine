@@ -23,6 +23,8 @@ public static class Formats
     };
 
     public static readonly Operation StripMetadata = new("metadata:strip", "Rimuovi metadati", null, null, "senza metadati");
+    public static readonly Operation EditMetadata = new("metadata:edit", "Metadati…", FileKind.Image, null, "metadati");
+    public static readonly Operation ReadQr = new("action:read-qr", "Leggi QR", FileKind.Image, null);
 
     /// <summary>Estensioni (senza punto) che Clementine sa leggere, alias compresi; "tar.gz" è coperto da "gz".</summary>
     public static IEnumerable<string> InputExtensions =>

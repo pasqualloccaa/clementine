@@ -27,9 +27,12 @@ public static class Toolbox
                     tools.Add(new("tool:crop", "Ritaglia…", kind, null, "ritagliata"));
                     if (ext is "jpg" or "webp" or "avif") tools.Add(new("tool:target-size", "Comprimi a…", kind, null, "compresso"));
                     tools.Add(ImagesToPdf);
+                    tools.Add(Formats.ReadQr);
+                    tools.Add(Formats.EditMetadata);
                     break;
                 case FileKind.Image:
                     tools.Add(ImagesToPdf);
+                    tools.Add(Formats.ReadQr);
                     break;
                 case FileKind.Video:
                     tools.Add(new("tool:compress-video", "Comprimi", kind, "mp4", "compresso"));
@@ -78,7 +81,7 @@ public static class Toolbox
     public static bool IsAction(Operation op) => op.Id.StartsWith("action:");
 
     /// <summary>Strumenti che prima di partire chiedono un valore (Operation.Argument).</summary>
-    public static bool AsksArgument(Operation op) => op.Id is "tool:trim" or "tool:speed" or "tool:target-size" or "tool:crop" or "tool:pages";
+    public static bool AsksArgument(Operation op) => op.Id is "tool:trim" or "tool:speed" or "tool:target-size" or "tool:crop" or "tool:pages" or "metadata:edit";
 
     /// <summary>I tre anelli, indicizzati per Ring.</summary>
     public static IReadOnlyList<Operation>[] RingsFor(IReadOnlyList<string> paths) =>

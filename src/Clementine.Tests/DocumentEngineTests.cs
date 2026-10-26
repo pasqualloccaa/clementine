@@ -129,7 +129,7 @@ public class MetadataEngineTests
 
     internal static string Exif(params string[] args)
     {
-        var psi = new ProcessStartInfo(Exiftool) { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true };
+        var psi = new ProcessStartInfo(Exiftool) { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true, StandardOutputEncoding = Encoding.UTF8 };
         foreach (var a in args) psi.ArgumentList.Add(a);
         using var p = Process.Start(psi)!;
         var output = p.StandardOutput.ReadToEnd();
@@ -158,6 +158,51 @@ public class MetadataEngineTests
 
         Assert.Equal("", Exif("-s3", "-Artist", output));
         Assert.Equal("Clementine Test", Exif("-s3", "-Artist", jpg));
+    }
+
+    // la modifica scrive una copia: titolo con accenti (passa dal file di argomenti UTF-8), data, GPS tolto
+    [Fact]
+    public async Task Edit_WritesCopy_WithAccents_AndRemovesGps()
+    {
+        using var dir = new TempDir();
+        var jpg = JpgWithArtist(dir);
+        Exif("-GPSLatitude=45.4", "-GPSLatitudeRef=N", "-GPSLongitude=9.2", "-GPSLongitudeRef=E", "-overwrite_original", jpg);
+        var output = Path.Combine(dir.Path, "copia.jpg");
+        var changes = new Dictionary<string, string> { ["Title"] = "Città di prova", ["Date"] = "2026:10:26 14:30:00", ["RemoveGps"] = "1" };
+        var op = Formats.EditMetadata with { Argument = System.Text.Json.JsonSerializer.Serialize(changes) };
+
+        await new MetadataEngine(Exiftool).RunAsync(new Job(jpg, op, output), new Progress<double>(), default);
+
+        Assert.Equal("Città di prova", Exif("-s3", "-charset", "UTF8", "-XMP:Title", output));
+        Assert.Equal("2026:10:26 14:30:00", Exif("-s3", "-DateTimeOriginal", output));
+        Assert.Equal("", Exif("-s3", "-GPSLatitude", output));
+        Assert.Equal("Clementine Test", Exif("-s3", "-Artist", output)); // i campi non toccati restano
+        Assert.NotEqual("", Exif("-s3", "-GPSLatitude", jpg)); // e l'originale è com'era
+    }
+
+    [Theory]
+    [InlineData("26/10/2026 14:30", "2026:10:26 14:30:00")]
+    [InlineData("1/2/2025", "2025:02:01 00:00:00")]
+    [InlineData("2026-10-26", null)]
+    public void ExifDate(string text, string? expected) => Assert.Equal(expected, MetadataEngine.ExifDate(text));
+
+    [Fact]
+    public void QrCode_IsRead_AndPlainImageHasNone()
+    {
+        using var dir = new TempDir();
+        var matrix = new ZXing.QrCode.QRCodeWriter().encode("https://example.com/clementine", ZXing.BarcodeFormat.QR_CODE, 300, 300);
+        using (var image = new MagickImage(MagickColors.White, 300, 300))
+        {
+            using (var pixels = image.GetPixels()) // i pixel arrivano all'immagine quando la collezione si chiude
+                for (var y = 0; y < 300; y++)
+                    for (var x = 0; x < 300; x++)
+                        if (matrix[x, y]) pixels.SetPixel(x, y, [0, 0, 0]);
+            image.Write(Path.Combine(dir.Path, "qr.png"));
+        }
+        new MagickImage(MagickColors.Orange, 200, 200).Write(Path.Combine(dir.Path, "vuota.png"));
+
+        Assert.Equal(["https://example.com/clementine"], QrReader.Read(Path.Combine(dir.Path, "qr.png")));
+        Assert.Empty(QrReader.Read(Path.Combine(dir.Path, "vuota.png")));
     }
 
     [Fact]

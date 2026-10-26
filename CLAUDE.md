@@ -159,6 +159,9 @@ Copia in…, Sposta in…, Copia percorso, Apri terminale qui, Condividi (Nearby
    Fatto: GIF 25 fps/640 px, strumento "Per il web" (immagini → WebP 1920 px, video → MP4 1280 px, senza metadati),
    icona vera (`Assets/clementine.svg` → `installer/make-icon.ps1`), tema dalla modalità app di Windows (ruota, menu,
    finestre), isola che scivola sul bordo, benvenuto al primo avvio e da "Come si usa".
+8. Strumenti con parametri (finestra dopo il rilascio, valori letti da `ToolArgs`): Taglia, Velocità, Comprimi a…,
+   Ritaglia (proporzioni), Pagine PDF; Registra schermo (ffmpeg gdigrab, microfono facoltativo, niente audio del PC);
+   Leggi QR (ZXing.Net, negli appunti) e Metadati… (ExifTool, scrive una copia).
 
 ## Criteri di "parità"
 - Da ingresso sull'isola a ruota visibile: < 150 ms.
