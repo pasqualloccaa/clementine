@@ -225,14 +225,81 @@ public class ToolEngineTests
         var png = Path.Combine(dir.Path, "a.png");
         new MagickImage(MagickColors.Orange, 400, 300).Write(png);
         var cropped = Path.Combine(dir.Path, "c.png");
-        await new MagickEngine().RunAsync(new Job(png, WithArg(png, "tool:crop", "16:9"), cropped), NoProgress, default);
-        using (var image = new MagickImage(cropped)) Assert.Equal((400u, 225u), (image.Width, image.Height));
+        await new MagickEngine().RunAsync(new Job(png, WithArg(png, "tool:crop", "0.25,0.5,0.5,0.5"), cropped), NoProgress, default);
+        using (var image = new MagickImage(cropped)) Assert.Equal((200u, 150u, 0, 0), (image.Width, image.Height, image.Page.X, image.Page.Y));
 
         var jpg = Path.Combine(dir.Path, "big.jpg");
         using (var noise = new MagickImage("plasma:", 2000, 1500)) { noise.Quality = 98; noise.Write(jpg); }
         var fitted = Path.Combine(dir.Path, "fit.jpg");
         await new MagickEngine().RunAsync(new Job(jpg, WithArg(jpg, "tool:target-size", "100 KB"), fitted), NoProgress, default);
         Assert.InRange(new FileInfo(fitted).Length, 50 * 1024, 100 * 1024); // sotto il limite, ma senza esagerare
+    }
+
+    [Theory]
+    [InlineData("50", 50u, 30u)]
+    [InlineData("1080", 1080u, 648u)] // anche ingrandendo
+    [InlineData("80x80", 80u, 48u)]
+    [InlineData("25%", 25u, 15u)]
+    public async Task Magick_Resize_KeepsProportions(string value, uint width, uint height)
+    {
+        using var dir = new TempDir();
+        var png = Path.Combine(dir.Path, "a.png");
+        new MagickImage(MagickColors.Orange, 100, 60).Write(png);
+        var output = Path.Combine(dir.Path, "out.png");
+
+        await new MagickEngine().RunAsync(new Job(png, WithArg(png, "tool:resize", value), output), NoProgress, default);
+
+        using var result = new MagickImage(output);
+        Assert.Equal((width, height), (result.Width, result.Height));
+    }
+
+    [Fact]
+    public async Task Magick_Annotate_DrawsOnPixels_AndDropsExifThumbnail()
+    {
+        using var dir = new TempDir();
+        var jpg = Path.Combine(dir.Path, "a.jpg");
+        using (var white = new MagickImage(MagickColors.White, 1000, 600))
+        {
+            white.Density = new Density(300); // le foto spesso dichiarano 300 dpi: il testo non deve diventare 4 volte più grande
+            var exif = new ExifProfile();
+            exif.SetValue(ExifTag.Artist, "Prova");
+            white.SetProfile(exif);
+            white.Write(jpg);
+        }
+        MetadataEngineTests.Exif("-overwrite_original", $"-ThumbnailImage<={WriteThumb(dir)}", jpg);
+        Assert.NotEqual("", MetadataEngineTests.Exif("-s3", "-ThumbnailImage", jpg));
+        var marks = new Mark[]
+        {
+            new(Mark.Redact, 0.1, 0.1, 0.3, 0.3),
+            new(Mark.Arrow, 0.5, 0.5, 0.9, 0.5, "#1E88E5"),
+            new(Mark.Label, 0.1, 0.7, 0, 0, "#E53935", "Ciao"),
+        };
+        var output = Path.Combine(dir.Path, "out.png");
+
+        await new MagickEngine().RunAsync(new Job(jpg, WithArg(jpg, "tool:annotate", ToolArgs.Marks(marks)), output), NoProgress, default);
+
+        using var result = new MagickImage(output);
+        using var pixels = result.GetPixels();
+        Assert.Equal(new MagickColor("#000"), pixels.GetPixel(200, 120).ToColor()); // dentro il box nero
+        var arrow = pixels.GetPixel(700, 300).ToColor()!;
+        Assert.True(arrow.B > 200 && arrow.R < 100, $"freccia: {arrow}");
+        // il testo sta sotto (0.1, 0.7) e alto più o meno quanto Mark.FontSize: 30 px su 600
+        var red = Enumerable.Range(0, 1000).SelectMany(x => Enumerable.Range(400, 200).Select(y => (x, y)))
+            .Where(p => pixels.GetPixel(p.x, p.y).ToColor() is { R: > 180, G: < 120 }).ToList();
+        Assert.NotEmpty(red);
+        Assert.InRange(red.Min(p => p.y), 420, 440);
+        Assert.InRange(red.Max(p => p.y) - red.Min(p => p.y), 12, 45);
+        var jpgOut = Path.Combine(dir.Path, "out.jpg");
+        await new MagickEngine().RunAsync(new Job(jpg, WithArg(jpg, "tool:annotate", ToolArgs.Marks(marks)), jpgOut), NoProgress, default);
+        Assert.Equal("", MetadataEngineTests.Exif("-s3", "-ThumbnailImage", jpgOut));
+        Assert.Equal("Prova", MetadataEngineTests.Exif("-s3", "-Artist", jpgOut)); // gli altri metadati restano
+    }
+
+    static string WriteThumb(TempDir dir)
+    {
+        var thumb = Path.Combine(dir.Path, "thumb.jpg");
+        new MagickImage(MagickColors.Green, 160, 96).Write(thumb);
+        return thumb;
     }
 
     [Fact]

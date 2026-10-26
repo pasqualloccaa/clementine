@@ -45,4 +45,34 @@ public class ToolArgsTests
         Assert.Null(ToolArgs.Pages("0", 3));
         Assert.Null(ToolArgs.Pages(",", 3));
     }
+
+    [Theory]
+    [InlineData("1080", "1080x1080")]
+    [InlineData("1920 x 1080", "1920x1080")]
+    [InlineData("800×600", "800x600")]
+    [InlineData("50%", "50%")]
+    [InlineData("0", null)]
+    [InlineData("50000", null)]
+    [InlineData("grande", null)]
+    public void Resize(string text, string? geometry) => Assert.Equal(geometry, ToolArgs.Resize(text));
+
+    [Fact]
+    public void Rect_RoundTrips_AndStaysInsideTheImage()
+    {
+        Assert.Equal((0.1, 0.2, 0.5, 0.4), ToolArgs.Rect(ToolArgs.Rect(0.1, 0.2, 0.5, 0.4)));
+        Assert.Null(ToolArgs.Rect("0.8,0,0.5,1")); // esce a destra
+        Assert.Null(ToolArgs.Rect("0,0,0,1"));
+        Assert.Null(ToolArgs.Rect("16:9"));
+    }
+
+    [Fact]
+    public void Marks_RoundTrip_AndRejectBadOnes()
+    {
+        Mark[] marks = [new(Mark.Arrow, 0.1, 0.1, 0.5, 0.5), new(Mark.Label, 0.2, 0.2, 0, 0, "#FFFFFF", "Città")];
+        Assert.Equal(marks, ToolArgs.Marks(ToolArgs.Marks(marks)));
+        Assert.Null(ToolArgs.Marks(ToolArgs.Marks([new(Mark.Label, 0.2, 0.2, 0, 0)]))); // testo vuoto
+        Assert.Null(ToolArgs.Marks(ToolArgs.Marks([new("cerchio", 0.2, 0.2, 0.3, 0.3)])));
+        Assert.Null(ToolArgs.Marks("[]"));
+        Assert.Null(ToolArgs.Marks("non json"));
+    }
 }

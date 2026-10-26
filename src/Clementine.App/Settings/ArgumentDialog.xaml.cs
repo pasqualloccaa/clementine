@@ -28,8 +28,11 @@ public partial class ArgumentDialog : Window
             "tool:speed" => Choice("Velocità", "Quanto più veloce?", [("0,5× (rallentato)", "0.5"), ("1,5×", "1.5"), ("2×", "2")]),
             "tool:target-size" => Text("Comprimi a", "Peso massimo di ogni file.", "es. 2 MB oppure 500 KB",
                 t => ToolArgs.Size(t) is null ? "Scrivi un peso: es. 2 MB oppure 500 KB" : null),
-            "tool:crop" => Choice("Ritaglia", "Quali proporzioni? Si tiene la parte centrale.",
-                [("1:1 quadrato", "1:1"), ("4:3", "4:3"), ("3:2", "3:2"), ("16:9", "16:9"), ("9:16 verticale", "9:16")]),
+            // con più foto: l'editor sulla prima, la stessa parte (in proporzione) su tutte
+            "tool:crop" => ImageEditor.Crop(files[0]),
+            "tool:annotate" => ImageEditor.Annotate(files[0]),
+            "tool:resize" => Text("Ridimensiona", "Nuova misura del lato più lungo, in pixel. Le proporzioni restano quelle della foto.",
+                "es. 1080, 1920x1080 oppure 50%", t => ToolArgs.Resize(t) is null ? "Scrivi una misura: es. 1080, 1920x1080 oppure 50%" : null),
             "tool:pages" => Pages(files),
             "metadata:edit" => MetadataDialog.Ask(files, exiftool),
             _ => throw new ArgumentException($"{op.Id} non chiede parametri"),

@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices.WindowsRuntime;
 using Clementine.Core;
 using ImageMagick;
+using ImageMagick.Drawing;
 using Windows.Graphics.Imaging;
 
 namespace Clementine.Engines;
@@ -14,7 +15,8 @@ public sealed class MagickEngine(string? exiftool = null) : IEngine
     static readonly Lazy<bool> HeifEncoder = new(() =>
         BitmapEncoder.GetEncoderInformationEnumerator().Any(i => i.CodecId == BitmapEncoder.HeifEncoderId));
 
-    static readonly string[] Tools = ["tool:compress", "tool:resize50", "tool:rotate90", "tool:web", "tool:crop", "tool:target-size", Toolbox.ImagesToPdf.Id];
+    static readonly string[] Tools = ["tool:compress", "tool:resize50", "tool:resize", "tool:rotate90", "tool:web", "tool:crop", "tool:annotate",
+        "tool:target-size", Toolbox.ImagesToPdf.Id];
 
     public bool CanHandle(Operation op) => op.Kind == FileKind.Image &&
         (op.Id.StartsWith("convert:") ? op.TargetExtension != "heic" || HeifEncoder.Value : Tools.Contains(op.Id));
@@ -32,7 +34,16 @@ public sealed class MagickEngine(string? exiftool = null) : IEngine
         ct.ThrowIfCancellationRequested();
         if (job.Op.Id == "tool:resize50") image.Resize(new Percentage(50));
         if (job.Op.Id == "tool:rotate90") image.Rotate(90);
+        if (job.Op.Id == "tool:resize")
+            image.Resize(new MagickGeometry(ToolArgs.Resize(job.Op.Argument ?? "") ?? throw new ArgumentException($"Misura non valida: {job.Op.Argument}")));
         if (job.Op.Id == "tool:crop") Crop(image, job.Op.Argument ?? "");
+        if (job.Op.Id == "tool:annotate") Draw(image, ToolArgs.Marks(job.Op.Argument ?? "") ?? throw new ArgumentException("Annotazioni non valide"));
+        // la miniatura EXIF mostrerebbe ancora la foto intera, parti oscurate comprese
+        if (job.Op.Id is "tool:crop" or "tool:annotate" && image.GetExifProfile() is { } exif)
+        {
+            exif.RemoveThumbnail();
+            image.SetProfile(exif);
+        }
         if (job.Op.Id == "tool:web") // preset: lato lungo al massimo 1920 px (mai ingrandita), niente metadati né GPS
         {
             image.Resize(new MagickGeometry(1920, 1920) { Greater = true });
@@ -66,17 +77,51 @@ public sealed class MagickEngine(string? exiftool = null) : IEngine
         progress.Report(1);
     }
 
-    /// <summary>"16:9" → il rettangolo più grande con quelle proporzioni, al centro.</summary>
-    static void Crop(MagickImage image, string ratio)
+    /// <summary>Il riquadro scelto nell'editor, in frazioni dell'immagine (vedi ToolArgs.Rect).</summary>
+    static void Crop(MagickImage image, string rect)
     {
-        var parts = ratio.Split(':');
-        if (parts.Length != 2 || !double.TryParse(parts[0], out var w) || !double.TryParse(parts[1], out var h) || w <= 0 || h <= 0)
-            throw new ArgumentException($"Proporzioni non valide: {ratio}");
-        var (width, height) = image.Width / (double)image.Height > w / h
-            ? ((uint)Math.Round(image.Height * w / h), image.Height)
-            : (image.Width, (uint)Math.Round(image.Width * h / w));
-        image.Crop(new MagickGeometry(width, height), Gravity.Center);
+        var (x, y, w, h) = ToolArgs.Rect(rect) ?? throw new ArgumentException($"Riquadro non valido: {rect}");
+        var (left, top) = ((int)Math.Round(x * image.Width), (int)Math.Round(y * image.Height));
+        var width = (uint)Math.Clamp(Math.Round(w * image.Width), 1, image.Width - left);
+        var height = (uint)Math.Clamp(Math.Round(h * image.Height), 1, image.Height - top);
+        image.Crop(new MagickGeometry(left, top, width, height));
         image.ResetPage();
+    }
+
+    /// <summary>Frecce, rettangoli, testo e box neri di "Annota…", con le stesse misure dell'anteprima (Mark).</summary>
+    static void Draw(MagickImage image, IReadOnlyList<Mark> marks)
+    {
+        var (w, h) = ((double)image.Width, (double)image.Height);
+        var stroke = Mark.StrokeWidth(Math.Min(w, h));
+        var font = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "segoeuib.ttf");
+        foreach (var m in marks)
+        {
+            var (x1, y1, x2, y2) = (m.X1 * w, m.Y1 * h, m.X2 * w, m.Y2 * h);
+            var color = new MagickColor(m.Color);
+            var draw = new Drawables();
+            switch (m.Kind)
+            {
+                case Mark.Redact:
+                    draw.FillColor(MagickColors.Black).Rectangle(Math.Min(x1, x2), Math.Min(y1, y2), Math.Max(x1, x2), Math.Max(y1, y2));
+                    break;
+                case Mark.Box:
+                    draw.StrokeColor(color).StrokeWidth(stroke).FillColor(MagickColors.Transparent)
+                        .Rectangle(Math.Min(x1, x2), Math.Min(y1, y2), Math.Max(x1, x2), Math.Max(y1, y2));
+                    break;
+                case Mark.Arrow:
+                    var head = Mark.ArrowHead(x1, y1, x2, y2, stroke);
+                    var neck = ((head[1].X + head[2].X) / 2, (head[1].Y + head[2].Y) / 2); // la linea finisce dentro la punta
+                    draw.StrokeColor(color).StrokeWidth(stroke).StrokeLineCap(LineCap.Round).Line(x1, y1, neck.Item1, neck.Item2)
+                        .StrokeWidth(0).FillColor(color).Polygon(head.Select(p => new PointD(p.X, p.Y)));
+                    break;
+                case Mark.Label:
+                    // l'immagine può avere 300 dpi: la misura del carattere va in pixel, come nell'anteprima
+                    draw.Density(72).Font(font).FontPointSize(Mark.FontSize(Math.Min(w, h))).FillColor(color)
+                        .Gravity(Gravity.Northwest).Text(x1, y1, m.Text!);
+                    break;
+            }
+            draw.Draw(image);
+        }
     }
 
     /// <summary>

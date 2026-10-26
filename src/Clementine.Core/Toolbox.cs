@@ -3,8 +3,8 @@ namespace Clementine.Core;
 /// <summary>Anelli Strumenti (Ctrl) e Azioni (Alt), più l'insieme dei tre anelli per la ruota.</summary>
 public static class Toolbox
 {
-    // shortcut: niente strumenti che chiedono un editor (ritaglio libero, annota, redazione, collage), split/join video
-    // e comprimi PDF (senza Ghostscript si perderebbe il testo selezionabile)
+    // shortcut: niente collage, split/join video, bip sull'audio e comprimi PDF (senza Ghostscript si perderebbe il testo selezionabile):
+    // scartati dall'utente il 26/10/2026
     public static readonly Operation Zip = new("tool:zip", "ZIP", null, "zip", Combines: true);
     public static readonly Operation ImagesToPdf = new("tool:images-to-pdf", "PDF", FileKind.Image, "pdf", Combines: true);
     public static readonly Operation MergePdf = new("tool:merge-pdf", "Unisci", FileKind.Pdf, "pdf", "unito", Combines: true);
@@ -22,9 +22,11 @@ public static class Toolbox
                     if (ext is "jpg" or "png" or "webp" or "avif")
                         tools.Add(new("tool:compress", "Comprimi", kind, null, "compresso"));
                     tools.Add(new("tool:resize50", "Riduci 50%", kind, null, "50%"));
+                    tools.Add(new("tool:resize", "Ridimensiona…", kind, null, "ridimensionata"));
                     tools.Add(new("tool:rotate90", "Ruota 90°", kind, null, "ruotata"));
                     tools.Add(new("tool:web", "Per il web", kind, "webp", "web"));
                     tools.Add(new("tool:crop", "Ritaglia…", kind, null, "ritagliata"));
+                    tools.Add(new("tool:annotate", "Annota…", kind, null, "annotata"));
                     if (ext is "jpg" or "webp" or "avif") tools.Add(new("tool:target-size", "Comprimi a…", kind, null, "compresso"));
                     tools.Add(ImagesToPdf);
                     tools.Add(Formats.ReadQr);
@@ -81,7 +83,8 @@ public static class Toolbox
     public static bool IsAction(Operation op) => op.Id.StartsWith("action:");
 
     /// <summary>Strumenti che prima di partire chiedono un valore (Operation.Argument).</summary>
-    public static bool AsksArgument(Operation op) => op.Id is "tool:trim" or "tool:speed" or "tool:target-size" or "tool:crop" or "tool:pages" or "metadata:edit";
+    public static bool AsksArgument(Operation op) => op.Id is "tool:trim" or "tool:speed" or "tool:target-size" or "tool:crop"
+        or "tool:resize" or "tool:annotate" or "tool:pages" or "metadata:edit";
 
     /// <summary>I tre anelli, indicizzati per Ring.</summary>
     public static IReadOnlyList<Operation>[] RingsFor(IReadOnlyList<string> paths) =>

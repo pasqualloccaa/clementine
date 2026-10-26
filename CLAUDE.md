@@ -162,6 +162,9 @@ Copia in…, Sposta in…, Copia percorso, Apri terminale qui, Condividi (Nearby
 8. Strumenti con parametri (finestra dopo il rilascio, valori letti da `ToolArgs`): Taglia, Velocità, Comprimi a…,
    Ritaglia (proporzioni), Pagine PDF; Registra schermo (ffmpeg gdigrab, microfono facoltativo, niente audio del PC);
    Leggi QR (ZXing.Net, negli appunti) e Metadati… (ExifTool, scrive una copia).
+   Poi: Ridimensiona… (`1080`, `1920x1080`, `50%`) e `ImageEditor` per Ritaglia… (riquadro libero o per proporzioni) e
+   Annota… (freccia, rettangolo, testo, Oscura = box nero; toglie la miniatura EXIF). Ridimensiona e Annota solo sulla ruota.
+   Scartati dall'utente: collage, unisci/dividi video, bip, comprimi PDF.
 
 ## Criteri di "parità"
 - Da ingresso sull'isola a ruota visibile: < 150 ms.
