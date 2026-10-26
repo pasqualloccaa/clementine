@@ -2,7 +2,7 @@
 
 Clone funzionale di **Tangerine: File Converter** (macOS, LEAP STUDIO) per Windows 10/11.
 Obiettivo: parità di esperienza d'uso, NON copia di codice (Tangerine è closed source).
-Nome, icona e grafica sono originali. Uso personale.
+Nome, icona e grafica sono originali. Open source, licenza MIT (vedi README.md e THIRD-PARTY-NOTICES.md).
 
 ## Esperienza utente
 
@@ -144,7 +144,8 @@ Copia in…, Sposta in…, Copia percorso, Apri terminale qui, Condividi (Nearby
 - I binari esterni stanno in `tools/` e vengono scaricati da `tools/get-tools.ps1` (ffmpeg, exiftool); LibreOffice è opzionale e rilevato se installato.
 - Installazione: `installer/build.ps1` pubblica un exe unico autonomo in `.build/Clementine` con "Installa Clementine.cmd"
   (`--install`): Clementine si copia da sé in `%LOCALAPPDATA%\Programs\Clementine`, menu Start, "Programmi installati"
-  (`--uninstall`). Niente Inno Setup: Smart App Control bloccava il suo eseguibile temporaneo non firmato.
+  (`--uninstall`). Crea anche `.build\Clementine-win-x64.zip`, da allegare alla release GitHub; `install.ps1` (da terminale,
+  `irm … | iex`) scarica lo zip dell'ultima release e lancia `--install`. Niente Inno Setup: Smart App Control bloccava il suo eseguibile temporaneo non firmato.
 - Log in `%APPDATA%\Clementine\logs\` con Serilog.
 - UI in italiano e inglese (resx).
 

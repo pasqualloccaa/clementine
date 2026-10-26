@@ -97,7 +97,7 @@ static class PdfToWord
                     case TableBlocks table: AddTable(content, ToTable(table, body, bullets)); break;
                     case TextBlock block when !(InMargin(block, page) && (repeated.Contains(MarginKey(block)) || IsPageNumber(block))):
                         var paragraphs = ToParagraphs(block, body, bullets);
-                        // pezzi della stessa riga separati da spazi larghi ("8 ott 2026 · @Pasquale", "1." e il testo della voce): restano una riga
+                        // pezzi della stessa riga separati da spazi larghi ("8 ott 2026 · @utente", "1." e il testo della voce): restano una riga
                         if (previous is { TextLines.Count: 1 } && content.Count > 0 && content[^1] is Paragraph last && paragraphs.Count > 0
                             && Math.Abs(previous.TextLines[0].Words[0].Letters[0].StartBaseLine.Y - block.TextLines[0].Words[0].Letters[0].StartBaseLine.Y) < 2
                             && block.BoundingBox.Left > previous.BoundingBox.Right)

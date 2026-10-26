@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $tools = $PSScriptRoot
 
 $ffmpegDir = Join-Path $tools 'ffmpeg'
-if (-not (Test-Path (Join-Path $ffmpegDir 'ffmpeg.exe'))) {
+if (-not (Test-Path (Join-Path $ffmpegDir 'ffmpeg.exe')) -or -not (Test-Path (Join-Path $ffmpegDir 'LICENSE'))) {
     $url = 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip'
     $tmp = Join-Path ([IO.Path]::GetTempPath()) "clementine-ffmpeg-$([guid]::NewGuid().ToString('N'))"
     New-Item -ItemType Directory $tmp | Out-Null
@@ -16,7 +16,8 @@ if (-not (Test-Path (Join-Path $ffmpegDir 'ffmpeg.exe'))) {
         if ($actual -ne $expected) { throw "SHA256 non corrisponde: atteso $expected, ottenuto $actual" }
         Expand-Archive $zip (Join-Path $tmp 'x')
         New-Item -ItemType Directory -Force $ffmpegDir | Out-Null
-        Get-ChildItem (Join-Path $tmp 'x') -Recurse -Include ffmpeg.exe, ffprobe.exe | Copy-Item -Destination $ffmpegDir
+        # LICENSE: la GPL chiede che il testo viaggi con i binari
+        Get-ChildItem (Join-Path $tmp 'x') -Recurse -Include ffmpeg.exe, ffprobe.exe, LICENSE | Copy-Item -Destination $ffmpegDir
     }
     finally { Remove-Item $tmp -Recurse -Force }
 }
