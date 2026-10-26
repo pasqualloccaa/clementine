@@ -130,7 +130,7 @@ public sealed class Pipeline : IDisposable
             var progress = new InlineProgress(p => Progress?.Invoke(batch, (done + p) / items.Count));
             try
             {
-                if (engine is null) throw new NotSupportedException($"Nessun motore per {batch.Op.Label}");
+                if (engine is null) throw new NotSupportedException(Lang.T($"Nessun motore per {batch.Op.Label}", $"No engine for {batch.Op.Label}"));
                 outputs.Add(await RunAsync(engine, input, batch.Op, batch.Op.Combines ? batch.Inputs : null, progress, ct));
                 sources.Add(input);
             }
@@ -170,7 +170,7 @@ public sealed class Pipeline : IDisposable
                 try
                 {
                     if (!File.Exists(job.Output) && !Directory.Exists(job.Output))
-                        throw new InvalidOperationException(failure ?? "nessun file prodotto");
+                        throw new InvalidOperationException(failure ?? Lang.T("nessun file prodotto", "no file produced"));
                     outputs.Add(Publish(job.Input, job.Op, job.Output));
                     sources.Add(job.Input);
                 }

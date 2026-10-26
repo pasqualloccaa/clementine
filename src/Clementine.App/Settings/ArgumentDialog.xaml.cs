@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using Clementine.Core;
 using Clementine.Engines;
+using static Clementine.Core.Lang;
 
 namespace Clementine.App.Settings;
 
@@ -25,14 +26,14 @@ public partial class ArgumentDialog : Window
         var value = op.Id switch
         {
             "tool:trim" => Trim(files),
-            "tool:speed" => Choice("Velocità", "Quanto più veloce?", [("0,5× (rallentato)", "0.5"), ("1,5×", "1.5"), ("2×", "2")]),
-            "tool:target-size" => Text("Comprimi a", "Peso massimo di ogni file.", "es. 2 MB oppure 500 KB",
-                t => ToolArgs.Size(t) is null ? "Scrivi un peso: es. 2 MB oppure 500 KB" : null),
+            "tool:speed" => Choice(T("Velocità", "Speed"), T("Quanto più veloce?", "How much faster?"), [(T("0,5× (rallentato)", "0.5× (slowed down)"), "0.5"), (T("1,5×", "1.5×"), "1.5"), ("2×", "2")]),
+            "tool:target-size" => Text(T("Comprimi a", "Compress to"), T("Peso massimo di ogni file.", "Maximum size of each file."), T("es. 2 MB oppure 500 KB", "e.g. 2 MB or 500 KB"),
+                t => ToolArgs.Size(t) is null ? T("Scrivi un peso: es. 2 MB oppure 500 KB", "Enter a size: e.g. 2 MB or 500 KB") : null),
             // con più foto: l'editor sulla prima, la stessa parte (in proporzione) su tutte
             "tool:crop" => ImageEditor.Crop(files[0]),
             "tool:annotate" => ImageEditor.Annotate(files[0]),
-            "tool:resize" => Text("Ridimensiona", "Nuova misura del lato più lungo, in pixel. Le proporzioni restano quelle della foto.",
-                "es. 1080, 1920x1080 oppure 50%", t => ToolArgs.Resize(t) is null ? "Scrivi una misura: es. 1080, 1920x1080 oppure 50%" : null),
+            "tool:resize" => Text(T("Ridimensiona", "Resize"), T("Nuova misura del lato più lungo, in pixel. Le proporzioni restano quelle della foto.", "New size of the longest side, in pixels. The photo keeps its proportions."),
+                T("es. 1080, 1920x1080 oppure 50%", "e.g. 1080, 1920x1080 or 50%"), t => ToolArgs.Resize(t) is null ? T("Scrivi una misura: es. 1080, 1920x1080 oppure 50%", "Enter a size: e.g. 1080, 1920x1080 or 50%") : null),
             "tool:pages" => Pages(files),
             "metadata:edit" => MetadataDialog.Ask(files, exiftool),
             _ => throw new ArgumentException($"{op.Id} non chiede parametri"),
@@ -44,14 +45,14 @@ public partial class ArgumentDialog : Window
     static string? Trim(IReadOnlyList<string> files) =>
         TrimEditor.Ask(files[0], out var opened) is { } range ? range
         : opened ? null
-        : Text("Taglia", "Windows non riesce a mostrare questo file. Quale parte tenere? Inizio e fine in minuti:secondi.", "es. 0:30-1:45",
-            t => ToolArgs.TimeRange(t) is null ? "Scrivi inizio e fine, con la fine dopo l'inizio: es. 0:30-1:45" : null);
+        : Text(T("Taglia", "Trim"), T("Windows non riesce a mostrare questo file. Quale parte tenere? Inizio e fine in minuti:secondi.", "Windows can't play this file. Which part do you want to keep? Start and end in minutes:seconds."), T("es. 0:30-1:45", "e.g. 0:30-1:45"),
+            t => ToolArgs.TimeRange(t) is null ? T("Scrivi inizio e fine, con la fine dopo l'inizio: es. 0:30-1:45", "Enter a start and an end, with the end after the start: e.g. 0:30-1:45") : null);
 
     static string? Pages(IReadOnlyList<string> files)
     {
         var count = files.Min(PdfiumEngine.PageCount); // con più PDF le pagine scelte devono esserci in tutti
-        return Text("Pagine", $"Quali pagine tenere, e in che ordine? Il PDF ne ha {count}.", "es. 3,1,2 oppure 1-5,8",
-            t => ToolArgs.Pages(t, count) is null ? $"Numeri da 1 a {count}, separati da virgole; intervalli con il trattino" : null);
+        return Text(T("Pagine", "Pages"), T($"Quali pagine tenere, e in che ordine? Il PDF ne ha {count}.", $"Which pages to keep, and in what order? The PDF has {count}."), T("es. 3,1,2 oppure 1-5,8", "e.g. 3,1,2 or 1-5,8"),
+            t => ToolArgs.Pages(t, count) is null ? T($"Numeri da 1 a {count}, separati da virgole; intervalli con il trattino", $"Numbers from 1 to {count}, separated by commas; ranges with a hyphen") : null);
     }
 
     static string? Text(string title, string prompt, string example, Func<string, string?> validate)

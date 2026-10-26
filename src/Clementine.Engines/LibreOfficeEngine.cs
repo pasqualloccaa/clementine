@@ -1,4 +1,5 @@
 using Clementine.Core;
+using static Clementine.Core.Lang;
 
 namespace Clementine.Engines;
 
@@ -24,7 +25,7 @@ public sealed class LibreOfficeEngine(string? soffice) : IBatchEngine
     {
         await RunAsync([job], progress, ct);
         if (!File.Exists(job.Output) && !Directory.Exists(job.Output))
-            throw new InvalidOperationException($"LibreOffice non sa convertire {Path.GetFileName(job.Input)} in {job.Op.TargetExtension!.ToUpperInvariant()}");
+            throw new InvalidOperationException(T($"LibreOffice non sa convertire {Path.GetFileName(job.Input)} in {job.Op.TargetExtension!.ToUpperInvariant()}", $"LibreOffice can't convert {Path.GetFileName(job.Input)} to {job.Op.TargetExtension!.ToUpperInvariant()}"));
     }
 
     /// <summary>Più file con un solo avvio di LibreOffice (che è la parte lenta: ~4 s).</summary>

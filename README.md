@@ -6,7 +6,7 @@ slice of the wheel that opens, and the converted copy appears next to the origin
 Clementine is inspired by Tangerine: File Converter for macOS. It is an
 independent project written from scratch, and it is not affiliated with LEAP STUDIO.
 
-> The user interface is currently in Italian.
+> The interface is in English and Italian. It follows the Windows display language, and you can change it in Settings.
 
 ## How it works
 
@@ -71,7 +71,7 @@ The script downloads the latest release, checks its SHA-256 and starts the insta
 
 1. Download `Clementine-win-x64.zip` from the [latest release](https://github.com/pasqualloccaa/clementine/releases/latest).
 2. Extract it anywhere.
-3. Double-click **Installa Clementine.cmd**.
+3. Double-click **Installa Clementine.cmd** ("Install Clementine").
 
 Clementine copies itself to `%LOCALAPPDATA%\Programs\Clementine`. It adds a Start menu entry and an entry under
 Settings → Apps, and can optionally start with Windows. It needs no administrator rights.

@@ -4,6 +4,7 @@ using Docnet.Core.Models;
 using ImageMagick;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Writer;
+using static Clementine.Core.Lang;
 
 namespace Clementine.Engines;
 
@@ -63,7 +64,7 @@ static void Merge(Job job, IProgress<double> progress, CancellationToken ct)
     {
         using var source = PdfDocument.Open(job.Input);
         var pages = ToolArgs.Pages(job.Op.Argument ?? "", source.NumberOfPages)
-            ?? throw new ArgumentException($"Pagine non valide per un PDF di {source.NumberOfPages}: {job.Op.Argument}");
+            ?? throw new ArgumentException(T($"Pagine non valide per un PDF di {source.NumberOfPages}: {job.Op.Argument}", $"Invalid pages for a {source.NumberOfPages}-page PDF: {job.Op.Argument}"));
         using var builder = new PdfDocumentBuilder();
         foreach (var page in pages) builder.AddPage(source, page);
         File.WriteAllBytes(job.Output, builder.Build());

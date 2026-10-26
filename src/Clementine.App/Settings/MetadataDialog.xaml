@@ -1,7 +1,8 @@
 <Window x:Class="Clementine.App.Settings.MetadataDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Metadati" SizeToContent="Height" Width="460" ResizeMode="NoResize" Topmost="True"
+        xmlns:app="clr-namespace:Clementine.App"
+        Title="{app:T 'Metadati', 'Metadata'}" SizeToContent="Height" Width="460" ResizeMode="NoResize" Topmost="True"
         WindowStartupLocation="CenterScreen" FontSize="14">
     <StackPanel Margin="24,20">
         <TextBlock x:Name="Info" TextWrapping="Wrap" Opacity="0.75" Margin="0,0,0,14" />
@@ -13,21 +14,21 @@
             <Grid.RowDefinitions>
                 <RowDefinition /><RowDefinition /><RowDefinition /><RowDefinition />
             </Grid.RowDefinitions>
-            <TextBlock Text="Titolo" VerticalAlignment="Center" Margin="0,0,12,8" />
+            <TextBlock Text="{app:T 'Titolo', 'Title'}" VerticalAlignment="Center" Margin="0,0,12,8" />
             <TextBox x:Name="TitleBox" Grid.Column="1" Padding="4,3" Margin="0,0,0,8" />
-            <TextBlock Grid.Row="1" Text="Autore" VerticalAlignment="Center" Margin="0,0,12,8" />
+            <TextBlock Grid.Row="1" Text="{app:T 'Autore', 'Author'}" VerticalAlignment="Center" Margin="0,0,12,8" />
             <TextBox x:Name="AuthorBox" Grid.Row="1" Grid.Column="1" Padding="4,3" Margin="0,0,0,8" />
             <TextBlock Grid.Row="2" Text="Copyright" VerticalAlignment="Center" Margin="0,0,12,8" />
             <TextBox x:Name="CopyrightBox" Grid.Row="2" Grid.Column="1" Padding="4,3" Margin="0,0,0,8" />
-            <TextBlock Grid.Row="3" Text="Data di scatto" VerticalAlignment="Center" Margin="0,0,12,0" />
-            <TextBox x:Name="DateBox" Grid.Row="3" Grid.Column="1" Padding="4,3" ToolTip="gg/mm/aaaa hh:mm" />
+            <TextBlock Grid.Row="3" Text="{app:T 'Data di scatto', 'Date taken'}" VerticalAlignment="Center" Margin="0,0,12,0" />
+            <TextBox x:Name="DateBox" Grid.Row="3" Grid.Column="1" Padding="4,3" ToolTip="{app:T 'gg/mm/aaaa hh:mm', 'dd/mm/yyyy hh:mm'}" />
         </Grid>
         <CheckBox x:Name="RemoveGpsBox" Margin="0,14,0,0" />
         <TextBlock x:Name="Error" Foreground="#E53935" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="Collapsed" />
-        <TextBlock Text="Si crea una copia con i nuovi metadati: l'originale resta com'è." Opacity="0.6" FontSize="12" Margin="0,14,0,0" />
+        <TextBlock Text="{app:T 'Si crea una copia con i nuovi metadati: l\'originale resta com\'è.', 'A copy is made with the new metadata: the original stays as it is.'}" Opacity="0.6" FontSize="12" Margin="0,14,0,0" />
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
-            <Button Content="Salva copia" MinWidth="100" Padding="0,4" IsDefault="True" Click="Ok_Click" />
-            <Button Content="Annulla" MinWidth="90" Padding="0,4" Margin="8,0,0,0" IsCancel="True" />
+            <Button Content="{app:T 'Salva copia', 'Save copy'}" MinWidth="100" Padding="0,4" IsDefault="True" Click="Ok_Click" />
+            <Button Content="{app:T 'Annulla', 'Cancel'}" MinWidth="90" Padding="0,4" Margin="8,0,0,0" IsCancel="True" />
         </StackPanel>
     </StackPanel>
 </Window>

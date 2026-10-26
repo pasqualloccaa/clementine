@@ -8,6 +8,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using Clementine.Core;
 using ImageMagick;
+using static Clementine.Core.Lang;
 
 namespace Clementine.App.Settings;
 
@@ -17,8 +18,8 @@ namespace Clementine.App.Settings;
 /// </summary>
 public partial class ImageEditor : Window
 {
-    static readonly (string Label, double? Ratio)[] Ratios = [("Libero", null), ("1:1", 1), ("4:3", 4 / 3.0), ("3:2", 1.5), ("16:9", 16 / 9.0), ("9:16", 9 / 16.0)];
-    static readonly (string Label, string Kind)[] Tools = [("➔ Freccia", Mark.Arrow), ("▭ Rettangolo", Mark.Box), ("T Testo", Mark.Label), ("■ Oscura", Mark.Redact)];
+    static (string Label, double? Ratio)[] Ratios => [(T("Libero", "Free"), null), ("1:1", 1), ("4:3", 4 / 3.0), ("3:2", 1.5), ("16:9", 16 / 9.0), ("9:16", 9 / 16.0)];
+    static (string Label, string Kind)[] Tools => [(T("➔ Freccia", "➔ Arrow"), Mark.Arrow), (T("▭ Rettangolo", "▭ Rectangle"), Mark.Box), (T("T Testo", "T Text"), Mark.Label), (T("■ Oscura", "■ Black out"), Mark.Redact)];
     static readonly string[] Colors = ["#E53935", "#FDD835", "#43A047", "#1E88E5", "#FFFFFF", "#000000"];
 
     readonly bool _cropping;
@@ -48,12 +49,12 @@ public partial class ImageEditor : Window
         Stage.Width = Picture.Width = _w;
         Stage.Height = Picture.Height = _h;
         _crop = new Rect(0, 0, _w, _h);
-        Title = $"{(cropping ? "Ritaglia" : "Annota")} – {System.IO.Path.GetFileName(file)}";
-        OkButton.Content = cropping ? "Ritaglia" : "Salva";
+        Title = $"{(cropping ? T("Ritaglia", "Crop") : T("Annota", "Annotate"))} – {System.IO.Path.GetFileName(file)}";
+        OkButton.Content = cropping ? T("Ritaglia", "Crop") : T("Salva", "Save");
         if (cropping)
         {
-            foreach (var (label, ratio) in Ratios) AddOption(label, label == "Libero", () => SetRatio(ratio));
-            Hint.Text = "Trascina sulla foto per scegliere la parte da tenere; trascina dall'interno del riquadro per spostarlo.";
+            foreach (var (label, ratio) in Ratios) AddOption(label, ratio is null, () => SetRatio(ratio));
+            Hint.Text = T("Trascina sulla foto per scegliere la parte da tenere; trascina dall'interno del riquadro per spostarlo.", "Drag on the photo to choose the part to keep; drag from inside the frame to move it.");
         }
         else
         {
@@ -63,7 +64,7 @@ public partial class ImageEditor : Window
                 AddOption(new Border { Width = 18, Height = 18, CornerRadius = new CornerRadius(9), BorderBrush = Brushes.Gray, BorderThickness = new Thickness(1),
                     Background = Brush(color) }, color == _color, () => _color = color, "color");
             UndoButton.Visibility = Visibility.Visible;
-            Hint.Text = "Trascina sulla foto per disegnare; con Testo fai clic dove scrivere e premi Invio. Oscura copre con un riquadro nero.";
+            Hint.Text = T("Trascina sulla foto per disegnare; con Testo fai clic dove scrivere e premi Invio. Oscura copre con un riquadro nero.", "Drag on the photo to draw; with Text, click where to write and press Enter. Black out covers with a black box.");
         }
         PreviewKeyDown += (_, e) =>
         {
@@ -239,7 +240,7 @@ public partial class ImageEditor : Window
             Canvas.SetTop(box, ((Point)box.Tag).Y);
             Overlay.Children.Add(box);
         }
-        Info.Text = _marks.Count == 0 ? "" : $"{_marks.Count} {(_marks.Count == 1 ? "segno" : "segni")}";
+        Info.Text = _marks.Count == 0 ? "" : $"{_marks.Count} {(_marks.Count == 1 ? T("segno", "mark") : T("segni", "marks"))}";
     }
 
     /// <summary>Lo stesso disegno di MagickEngine.Draw, sull'anteprima.</summary>

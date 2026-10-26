@@ -12,6 +12,7 @@ using Microsoft.Win32;
 using Serilog;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
+using static Clementine.Core.Lang;
 
 namespace Clementine.App.Shell;
 
@@ -32,7 +33,7 @@ static class FileActions
                     var dialog = new OpenFolderDialog { Title = op.Label, InitialDirectory = Path.GetDirectoryName(paths[0]) };
                     if (dialog.ShowDialog() != true) return;
                     var done = await Task.Run(() => move ? FileOps.MoveInto(paths, dialog.FolderName) : FileOps.CopyInto(paths, dialog.FolderName));
-                    JobToasts.Info(move ? "Spostati" : "Copiati", $"{done.Count} in {dialog.FolderName}", done[0]);
+                    JobToasts.Info(move ? T("Spostati", "Moved") : T("Copiati", "Copied"), T($"{done.Count} in {dialog.FolderName}", $"{done.Count} to {dialog.FolderName}"), done[0]);
                     break;
 
                 case "action:copy-path":
@@ -57,27 +58,27 @@ static class FileActions
                     var texts = await Task.Run(() => paths.SelectMany(Clementine.Engines.QrReader.Read).Distinct().ToArray());
                     if (texts.Length == 0)
                     {
-                        JobToasts.Info("Nessun QR trovato", "Prova con un'immagine più nitida o più grande.");
+                        JobToasts.Info(T("Nessun QR trovato", "No QR code found"), T("Prova con un'immagine più nitida o più grande.", "Try a sharper or larger image."));
                         break;
                     }
                     // negli appunti e basta: un link da un QR sconosciuto non si apre da solo
                     System.Windows.Clipboard.SetText(string.Join(Environment.NewLine, texts));
                     var shown = string.Join("\n", texts);
-                    JobToasts.Info("QR copiato negli appunti", shown.Length > 300 ? shown[..300] + "…" : shown);
+                    JobToasts.Info(T("QR copiato negli appunti", "QR code copied to clipboard"), shown.Length > 300 ? shown[..300] + "…" : shown);
                     break;
 
                 case "action:new-folder":
-                    var folder = OutputPath.Free(Path.Combine(Path.GetDirectoryName(paths[0])!, "Nuova cartella"), isFolder: true);
+                    var folder = OutputPath.Free(Path.Combine(Path.GetDirectoryName(paths[0])!, T("Nuova cartella", "New folder")), isFolder: true);
                     Directory.CreateDirectory(folder);
                     var moved = await Task.Run(() => FileOps.MoveInto(paths, folder));
-                    JobToasts.Info("Nuova cartella", $"{moved.Count} file in {Path.GetFileName(folder)}", folder);
+                    JobToasts.Info(T("Nuova cartella", "New folder"), T($"{moved.Count} file in {Path.GetFileName(folder)}", $"{moved.Count} files in {Path.GetFileName(folder)}"), folder);
                     break;
             }
         }
         catch (Exception e)
         {
             Log.Error(e, "Azione {Op} fallita su {Paths}", op.Id, paths);
-            JobToasts.Info($"{op.Label}: non riuscito", e.Message);
+            JobToasts.Info(T($"{op.Label}: non riuscito", $"{op.Label}: failed"), e.Message);
         }
     }
 
@@ -98,7 +99,7 @@ static class FileActions
         host.Close();
         var id = Guid.NewGuid().ToString("N");
         PendingShares[id] = paths;
-        JobToasts.ShareReady(id, paths.Length == 1 ? Path.GetFileName(paths[0]) : $"{paths.Length} file");
+        JobToasts.ShareReady(id, paths.Length == 1 ? Path.GetFileName(paths[0]) : T($"{paths.Length} file", $"{paths.Length} files"));
     }
 
     /// <summary>
@@ -135,7 +136,7 @@ static class FileActions
         catch (Exception e)
         {
             Log.Error(e, "Condividi fallito su {Paths}", paths);
-            JobToasts.Info("Condividi: non riuscito", e.Message);
+            JobToasts.Info(T("Condividi: non riuscito", "Share: failed"), e.Message);
         }
     }
 
@@ -151,7 +152,7 @@ static class FileActions
         void OnRequested(DataTransferManager sender, DataRequestedEventArgs e)
         {
             sender.DataRequested -= OnRequested; // il manager è per finestra: niente gestori accumulati
-            e.Request.Data.Properties.Title = paths.Length == 1 ? Path.GetFileName(paths[0]) : $"{paths.Length} file";
+            e.Request.Data.Properties.Title = paths.Length == 1 ? Path.GetFileName(paths[0]) : T($"{paths.Length} file", $"{paths.Length} files");
             e.Request.Data.SetStorageItems(items);
         }
         manager.DataRequested += OnRequested;

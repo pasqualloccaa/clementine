@@ -1,5 +1,6 @@
 using System.Globalization;
 using Clementine.Core;
+using static Clementine.Core.Lang;
 
 namespace Clementine.Engines;
 
@@ -23,8 +24,8 @@ public sealed class FfmpegEngine(string ffmpegDir) : IEngine
         string[] input = [];
         if (job.Op.Id == "tool:trim")
         {
-            var (start, end) = ToolArgs.TimeRange(arg) ?? throw new ArgumentException($"Intervallo non valido: {arg}");
-            if (duration > 0 && start >= duration) throw new InvalidOperationException($"Il file dura {duration:0} secondi: l'inizio è oltre la fine");
+            var (start, end) = ToolArgs.TimeRange(arg) ?? throw new ArgumentException(T($"Intervallo non valido: {arg}", $"Invalid time range: {arg}"));
+            if (duration > 0 && start >= duration) throw new InvalidOperationException(T($"Il file dura {duration:0} secondi: l'inizio è oltre la fine", $"The file is {duration:0} seconds long: the start is past the end"));
             input = ["-ss", Invariant(start), "-to", Invariant(end)];
             duration = (duration > 0 ? Math.Min(end, duration) : end) - start;
         }
@@ -34,7 +35,7 @@ public sealed class FfmpegEngine(string ffmpegDir) : IEngine
             "tool:compress-video" => Compress,
             "tool:web" => Web,
             "tool:speed" => Speed(speed),
-            "tool:target-size" => TargetSize(ToolArgs.Size(arg) ?? throw new ArgumentException($"Dimensione non valida: {arg}"), duration),
+            "tool:target-size" => TargetSize(ToolArgs.Size(arg) ?? throw new ArgumentException(T($"Dimensione non valida: {arg}", $"Invalid size: {arg}")), duration),
             // loudnorm lavora a 192 kHz: si torna a 48 kHz, che vale per tutti i formati di uscita
             "tool:normalize" => ["-af", "loudnorm=I=-16:TP=-1.5:LRA=11", "-ar", "48000", .. CodecArgs(ext)],
             "tool:mono" => ["-ac", "1", .. CodecArgs(ext)],
@@ -73,7 +74,7 @@ public sealed class FfmpegEngine(string ffmpegDir) : IEngine
         "ogg" => ["-vn", "-c:a", "libvorbis", "-q:a", "5"],
         "opus" => ["-vn", "-c:a", "libopus", "-b:a", "128k"],
         "wma" => ["-vn", "-c:a", "wmav2", "-b:a", "192k"],
-        _ => throw new NotSupportedException($"Formato di uscita non gestito: {ext}"),
+        _ => throw new NotSupportedException(T($"Formato di uscita non gestito: {ext}", $"Unsupported output format: {ext}")),
     };
 
     // H.264 più compresso, al massimo 1080p di larghezza 1920
@@ -92,7 +93,7 @@ public sealed class FfmpegEngine(string ffmpegDir) : IEngine
     /// </summary>
     internal static string[] TargetSize(long bytes, double duration)
     {
-        if (duration <= 0) throw new InvalidOperationException("Durata del video sconosciuta: non si può calcolare la compressione");
+        if (duration <= 0) throw new InvalidOperationException(T("Durata del video sconosciuta: non si può calcolare la compressione", "Unknown video length: can't work out the compression"));
         const int audio = 96;
         var video = (int)Math.Max(bytes * 8 / 1000.0 / duration * 0.95 - audio, 50);
         var width = video >= 2500 ? 1920 : video >= 1000 ? 1280 : 854;

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using Clementine.Core;
+using static Clementine.Core.Lang;
 
 namespace Clementine.Engines;
 
@@ -47,7 +48,7 @@ public sealed class MetadataEngine(string exiftool) : IEngine
                 "Copyright" => ["EXIF:Copyright", "XMP:Rights"],
                 "Date" => ["EXIF:DateTimeOriginal", "EXIF:CreateDate"],
                 "RemoveGps" => [],
-                _ => throw new ArgumentException($"Campo sconosciuto: {field}"),
+                _ => throw new ArgumentException(T($"Campo sconosciuto: {field}", $"Unknown field: {field}")),
             };
             args.AddRange(tags.Select(t => $"-{t}={value}"));
         }

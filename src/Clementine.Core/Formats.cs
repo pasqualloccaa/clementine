@@ -23,9 +23,10 @@ public static class Formats
         ["jpeg"] = "jpg", ["heif"] = "heic", ["tif"] = "tiff", ["aif"] = "aiff", ["m4v"] = "mp4", ["tgz"] = "tar.gz",
     };
 
-    public static readonly Operation StripMetadata = new("metadata:strip", "Rimuovi metadati", null, null, "senza metadati");
-    public static readonly Operation EditMetadata = new("metadata:edit", "Metadati…", FileKind.Image, null, "metadati");
-    public static readonly Operation ReadQr = new("action:read-qr", "Leggi QR", FileKind.Image, null);
+    public static Operation StripMetadata => new("metadata:strip", Lang.T("Rimuovi metadati", "Remove metadata"), null, null,
+        Lang.T("senza metadati", "no metadata"));
+    public static Operation EditMetadata => new("metadata:edit", Lang.T("Metadati…", "Metadata…"), FileKind.Image, null, Lang.T("metadati", "metadata"));
+    public static Operation ReadQr => new("action:read-qr", Lang.T("Leggi QR", "Read QR"), FileKind.Image, null);
 
     /// <summary>Estensioni (senza punto) che Clementine sa leggere, alias compresi; "tar.gz" è coperto da "gz".</summary>
     public static IEnumerable<string> InputExtensions =>

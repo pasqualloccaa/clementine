@@ -49,7 +49,7 @@ public static class FileOps
         var isFolder = Directory.Exists(source);
         var target = OutputPath.Free(Path.Combine(folder, Path.GetFileName(source.TrimEnd('\\', '/'))), isFolder);
         if (isFolder && Path.GetFullPath(target).StartsWith(Path.GetFullPath(source) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-            throw new IOException($"Non si può mettere una cartella dentro se stessa: {source}");
+            throw new IOException(Lang.T($"Non si può mettere una cartella dentro se stessa: {source}", $"A folder can't go inside itself: {source}"));
 
         var sameVolume = string.Equals(Path.GetPathRoot(Path.GetFullPath(source)), Path.GetPathRoot(Path.GetFullPath(folder)), StringComparison.OrdinalIgnoreCase);
         if (move && sameVolume)

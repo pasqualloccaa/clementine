@@ -3,6 +3,7 @@ using SharpCompress.Common;
 using SharpCompress.Readers;
 using SharpCompress.Writers;
 using SharpCompress.Writers.Tar;
+using static Clementine.Core.Lang;
 
 namespace Clementine.Engines;
 
@@ -46,7 +47,7 @@ public sealed class ArchiveEngine : IEngine
             "zip" => (ArchiveType.Zip, CompressionType.Deflate),
             "tar" => (ArchiveType.Tar, CompressionType.None),
             "tar.gz" => (ArchiveType.Tar, CompressionType.GZip),
-            var ext => throw new NotSupportedException($"Formato di uscita non gestito: {ext}"),
+            var ext => throw new NotSupportedException(T($"Formato di uscita non gestito: {ext}", $"Unsupported output format: {ext}")),
         };
 
         using var input = File.OpenRead(job.Input);

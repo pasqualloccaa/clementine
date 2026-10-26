@@ -3,6 +3,7 @@ using Clementine.Core;
 using ImageMagick;
 using ImageMagick.Drawing;
 using Windows.Graphics.Imaging;
+using static Clementine.Core.Lang;
 
 namespace Clementine.Engines;
 
@@ -35,9 +36,9 @@ public sealed class MagickEngine(string? exiftool = null) : IEngine
         if (job.Op.Id == "tool:resize50") image.Resize(new Percentage(50));
         if (job.Op.Id == "tool:rotate90") image.Rotate(90);
         if (job.Op.Id == "tool:resize")
-            image.Resize(new MagickGeometry(ToolArgs.Resize(job.Op.Argument ?? "") ?? throw new ArgumentException($"Misura non valida: {job.Op.Argument}")));
+            image.Resize(new MagickGeometry(ToolArgs.Resize(job.Op.Argument ?? "") ?? throw new ArgumentException(T($"Misura non valida: {job.Op.Argument}", $"Invalid size: {job.Op.Argument}"))));
         if (job.Op.Id == "tool:crop") Crop(image, job.Op.Argument ?? "");
-        if (job.Op.Id == "tool:annotate") Draw(image, ToolArgs.Marks(job.Op.Argument ?? "") ?? throw new ArgumentException("Annotazioni non valide"));
+        if (job.Op.Id == "tool:annotate") Draw(image, ToolArgs.Marks(job.Op.Argument ?? "") ?? throw new ArgumentException(T("Annotazioni non valide", "Invalid annotations")));
         // la miniatura EXIF mostrerebbe ancora la foto intera, parti oscurate comprese
         if (job.Op.Id is "tool:crop" or "tool:annotate" && image.GetExifProfile() is { } exif)
         {
@@ -72,7 +73,7 @@ public sealed class MagickEngine(string? exiftool = null) : IEngine
             if (File.Exists(exiftool)) await MetadataEngine.CopyAsync(exiftool, job.Input, job.Output, ct);
         }
         else if (job.Op.Id == "tool:target-size")
-            await File.WriteAllBytesAsync(job.Output, FitSize(image, ToolArgs.Size(job.Op.Argument ?? "") ?? throw new ArgumentException($"Dimensione non valida: {job.Op.Argument}"), ct), ct);
+            await File.WriteAllBytesAsync(job.Output, FitSize(image, ToolArgs.Size(job.Op.Argument ?? "") ?? throw new ArgumentException(T($"Dimensione non valida: {job.Op.Argument}", $"Invalid size: {job.Op.Argument}")), ct), ct);
         else image.Write(job.Output);
         progress.Report(1);
     }
@@ -80,7 +81,7 @@ public sealed class MagickEngine(string? exiftool = null) : IEngine
     /// <summary>Il riquadro scelto nell'editor, in frazioni dell'immagine (vedi ToolArgs.Rect).</summary>
     static void Crop(MagickImage image, string rect)
     {
-        var (x, y, w, h) = ToolArgs.Rect(rect) ?? throw new ArgumentException($"Riquadro non valido: {rect}");
+        var (x, y, w, h) = ToolArgs.Rect(rect) ?? throw new ArgumentException(T($"Riquadro non valido: {rect}", $"Invalid area: {rect}"));
         var (left, top) = ((int)Math.Round(x * image.Width), (int)Math.Round(y * image.Height));
         var width = (uint)Math.Clamp(Math.Round(w * image.Width), 1, image.Width - left);
         var height = (uint)Math.Clamp(Math.Round(h * image.Height), 1, image.Height - top);
@@ -142,7 +143,7 @@ public sealed class MagickEngine(string? exiftool = null) : IEngine
                 else high = quality - 1;
             }
             if (best is not null) return best;
-            if (image.Width < 64) throw new InvalidOperationException("Impossibile scendere sotto quel peso");
+            if (image.Width < 64) throw new InvalidOperationException(T("Impossibile scendere sotto quel peso", "Can't get the file that small"));
             image.Resize(new Percentage(80));
         }
     }

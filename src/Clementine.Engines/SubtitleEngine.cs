@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using Clementine.Core;
+using static Clementine.Core.Lang;
 
 namespace Clementine.Engines;
 
@@ -18,13 +19,13 @@ public sealed class SubtitleEngine : IEngine
     public async Task RunAsync(Job job, IProgress<double> progress, CancellationToken ct)
     {
         var cues = Parse(Read(job.Input));
-        if (cues.Count == 0) throw new InvalidDataException("Nessun sottotitolo trovato nel file.");
+        if (cues.Count == 0) throw new InvalidDataException(T("Nessun sottotitolo trovato nel file.", "No subtitles found in the file."));
         var text = job.Op.TargetExtension switch
         {
             "vtt" => "WEBVTT\n\n" + string.Concat(cues.Select(c => $"{Stamp(c.Start, '.')} --> {Stamp(c.End, '.')}\n{c.Text}\n\n")),
             "srt" => string.Concat(cues.Select((c, i) =>
                 $"{i + 1}\r\n{Stamp(c.Start, ',')} --> {Stamp(c.End, ',')}\r\n{c.Text.Replace("\n", "\r\n")}\r\n\r\n")),
-            var ext => throw new NotSupportedException($"Formato di uscita non gestito: {ext}"),
+            var ext => throw new NotSupportedException(T($"Formato di uscita non gestito: {ext}", $"Unsupported output format: {ext}")),
         };
         await File.WriteAllTextAsync(job.Output, text, new UTF8Encoding(false), ct);
         progress.Report(1);

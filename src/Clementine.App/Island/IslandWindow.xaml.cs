@@ -10,6 +10,7 @@ using System.Windows.Threading;
 using Clementine.App.Settings;
 using Clementine.App.Wheel;
 using Clementine.Core;
+using static Clementine.Core.Lang;
 
 namespace Clementine.App.Island;
 
@@ -28,7 +29,7 @@ public partial class IslandWindow : Window
     readonly DispatcherTimer _closeTimer = new() { Interval = TimeSpan.FromMilliseconds(80) };
     readonly List<Path> _slices = [];
     readonly List<UIElement> _wheelItems = [];
-    static readonly string[] RingNames = ["Converti", "Strumenti", "Azioni"];
+    static string[] RingNames => [T("Converti", "Convert"), T("Strumenti", "Tools"), T("Azioni", "Actions")];
     readonly HubDwell _hub = new(TimeSpan.FromMilliseconds(1500)); // provati 400 e 800 ms: troppo rapidi all'uso
     IReadOnlyList<Operation>[] _rings = [];
     IReadOnlyList<Operation> _ops = [];

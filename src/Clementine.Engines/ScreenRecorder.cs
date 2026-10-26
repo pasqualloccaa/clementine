@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using static Clementine.Core.Lang;
 
 namespace Clementine.Engines;
 
@@ -19,7 +20,7 @@ public sealed class ScreenRecorder(string ffmpegDir)
 
     public void Start(Rectangle screen, string output, string? microphone)
     {
-        if (IsRecording) throw new InvalidOperationException("Registrazione già in corso");
+        if (IsRecording) throw new InvalidOperationException(T("Registrazione già in corso", "Already recording"));
         var psi = new ProcessStartInfo(_ffmpeg) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true };
         // x264 vuole dimensioni pari
         string[] args = ["-hide_banner", "-loglevel", "error", "-n", "-f", "gdigrab", "-framerate", "30",

@@ -11,6 +11,7 @@ using Clementine.Core;
 using Clementine.Engines;
 using Serilog;
 using Forms = System.Windows.Forms;
+using static Clementine.Core.Lang;
 
 namespace Clementine.App;
 
@@ -33,6 +34,7 @@ public partial class App : Application
     {
         base.OnStartup(e);
         AttachConsole(-1); // WinExe: fa arrivare Console.WriteLine al terminale da cui è stata lanciata
+        Lang.Apply(_settings.Language); // prima di qualunque testo, finestre di installazione comprese
         if (e.Args is ["--install"] or ["--uninstall"])
         {
             try
@@ -53,7 +55,7 @@ public partial class App : Application
         {
             // se l'istanza aperta non risponde (es. ancora in avvio), il clic non deve sparire nel nulla
             if (request is not null && !SingleInstance.TrySend(SingleInstance.DefaultName, request))
-                JobToasts.Info("Clementine non risponde", "Riprova tra qualche secondo.");
+                JobToasts.Info(T("Clementine non risponde", "Clementine is not responding"), T("Riprova tra qualche secondo.", "Try again in a few seconds."));
             Shutdown();
             return;
         }
@@ -127,16 +129,16 @@ public partial class App : Application
     Forms.ToolStripMenuItem RecordMenu()
     {
         if (_recorder!.IsRecording)
-            return new Forms.ToolStripMenuItem("■ Ferma registrazione", null, async (_, _) => await StopRecordingAsync());
-        var menu = new Forms.ToolStripMenuItem("Registra schermo");
+            return new Forms.ToolStripMenuItem(T("■ Ferma registrazione", "■ Stop recording"), null, async (_, _) => await StopRecordingAsync());
+        var menu = new Forms.ToolStripMenuItem(T("Registra schermo", "Record screen"));
         var screens = ScreenRecorder.Screens();
         for (var i = 0; i < screens.Count; i++)
         {
             var screen = screens[i];
-            menu.DropDownItems.Add($"Schermo {i + 1} ({screen.Width}×{screen.Height})", null, (_, _) => StartRecording(screen));
+            menu.DropDownItems.Add(T($"Schermo {i + 1} ({screen.Width}×{screen.Height})", $"Screen {i + 1} ({screen.Width}×{screen.Height})"), null, (_, _) => StartRecording(screen));
         }
         menu.DropDownItems.Add(new Forms.ToolStripSeparator());
-        menu.DropDownItems.Add(new Forms.ToolStripMenuItem("Con il microfono", null, (_, _) =>
+        menu.DropDownItems.Add(new Forms.ToolStripMenuItem(T("Con il microfono", "With microphone"), null, (_, _) =>
         {
             _settings.RecordMicrophone = !_settings.RecordMicrophone;
             _settings.Save();
@@ -147,9 +149,9 @@ public partial class App : Application
     void StartRecording(System.Drawing.Rectangle screen)
     {
         var videos = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
-        var output = OutputPath.Next(Path.Combine(videos, $"Registrazione {DateTime.Now:yyyy-MM-dd HH.mm.ss}.mp4"), "mp4");
+        var output = OutputPath.Next(Path.Combine(videos, $"{T("Registrazione", "Recording")} {DateTime.Now:yyyy-MM-dd HH.mm.ss}.mp4"), "mp4");
         var microphone = _settings.RecordMicrophone ? _recorder!.Microphone() : null;
-        if (_settings.RecordMicrophone && microphone is null) Toast(() => JobToasts.Info("Nessun microfono", "Registro solo lo schermo."));
+        if (_settings.RecordMicrophone && microphone is null) Toast(() => JobToasts.Info(T("Nessun microfono", "No microphone"), T("Registro solo lo schermo.", "Recording the screen only.")));
         _recorder!.Start(screen, output, microphone);
         Log.Information("Registrazione di {Screen} in {Output}", screen, output);
         _island!.SetRecording(true);
@@ -159,16 +161,17 @@ public partial class App : Application
     {
         var output = await _recorder!.StopAsync();
         _island!.SetRecording(false);
-        if (output is null) Toast(() => JobToasts.Info("Registrazione non riuscita", "Il video non è stato salvato."));
-        else Toast(() => JobToasts.Info("Registrazione salvata", Path.GetFileName(output), select: output));
+        if (output is null) Toast(() => JobToasts.Info(T("Registrazione non riuscita", "Recording failed"), T("Il video non è stato salvato.", "The video was not saved.")));
+        else Toast(() => JobToasts.Info(T("Registrazione salvata", "Recording saved"), Path.GetFileName(output), select: output));
     }
 
     // ---- installazione (vedi SelfInstall) ----
 
     static void Install()
     {
-        var answer = MessageBox.Show($"Clementine verrà installata in\n{SelfInstall.DefaultDir}\n\nVuoi che parta all'accensione del computer?",
-            "Installa Clementine", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+        var answer = MessageBox.Show(T($"Clementine verrà installata in\n{SelfInstall.DefaultDir}\n\nVuoi che parta all'accensione del computer?",
+                $"Clementine will be installed in\n{SelfInstall.DefaultDir}\n\nStart it when the computer starts?"),
+            T("Installa Clementine", "Install Clementine"), MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
         if (answer == MessageBoxResult.Cancel) return;
         SingleInstance.Quit(SingleInstance.DefaultName); // una versione aperta va chiusa prima di sostituirne i file
         var exe = SelfInstall.Install(AppContext.BaseDirectory, SelfInstall.DefaultDir, Microsoft.Win32.Registry.CurrentUser);
@@ -179,7 +182,8 @@ public partial class App : Application
 
     static void Uninstall()
     {
-        if (MessageBox.Show("Disinstallare Clementine?\n\nImpostazioni e log in %APPDATA%\\Clementine restano.", "Clementine",
+        if (MessageBox.Show(T("Disinstallare Clementine?\n\nImpostazioni e log in %APPDATA%\\Clementine restano.",
+                    "Uninstall Clementine?\n\nSettings and logs in %APPDATA%\\Clementine are kept."), "Clementine",
                 MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         // prima si chiude quella aperta: appena avviata potrebbe riscrivere il menu dopo che l'abbiamo tolto
         SingleInstance.Quit(SingleInstance.DefaultName);
@@ -219,7 +223,7 @@ public partial class App : Application
             if (op is null || !(Toolbox.IsAction(op) || _pipeline!.CanRun(op)))
             {
                 Log.Warning("Richiesta esterna rifiutata: {Op} su {Files}", id, paths);
-                Toast(() => JobToasts.Info("Operazione non disponibile", $"{id} non si applica a questi file"));
+                Toast(() => JobToasts.Info(T("Operazione non disponibile", "Operation not available"), T($"{id} non si applica a questi file", $"{id} does not apply to these files")));
                 continue;
             }
             Run(op, files);
@@ -247,9 +251,9 @@ public partial class App : Application
         for (var i = 0; i < queue.Count; i++)
         {
             var batch = queue[i];
-            var files = batch.Inputs.Count == 1 ? Path.GetFileName(batch.Inputs[0]) : $"{batch.Inputs.Count} file";
+            var files = batch.Inputs.Count == 1 ? Path.GetFileName(batch.Inputs[0]) : T($"{batch.Inputs.Count} file", $"{batch.Inputs.Count} files");
             var item = new Forms.ToolStripMenuItem($"{(i == 0 ? "▶" : "⏸")} {batch.Op.Label} – {files}");
-            item.DropDownItems.Add("Annulla", null, (_, _) => _pipeline.Cancel(batch.Id));
+            item.DropDownItems.Add(T("Annulla", "Cancel"), null, (_, _) => _pipeline.Cancel(batch.Id));
             items.Add(item);
         }
         if (queue.Count > 0) items.Add(new Forms.ToolStripSeparator());
@@ -258,9 +262,9 @@ public partial class App : Application
         {
             var op = Toolbox.Find(recent.Input, recent.OpId);
             var item = new Forms.ToolStripMenuItem(Path.GetFileName(recent.Output));
-            item.DropDownItems.Add(new Forms.ToolStripMenuItem($"Ripeti ({op?.Label ?? recent.OpId})", null,
+            item.DropDownItems.Add(new Forms.ToolStripMenuItem(T($"Ripeti ({op?.Label ?? recent.OpId})", $"Repeat ({op?.Label ?? recent.OpId})"), null,
                 (_, _) => Run(op!, [recent.Input])) { Enabled = op is not null && File.Exists(recent.Input) });
-            item.DropDownItems.Add(new Forms.ToolStripMenuItem("Apri cartella", null,
+            item.DropDownItems.Add(new Forms.ToolStripMenuItem(T("Apri cartella", "Open folder"), null,
                 (_, _) => Process.Start("explorer.exe", $"/select,\"{recent.Output}\"")));
             items.Add(item);
         }
@@ -268,9 +272,9 @@ public partial class App : Application
 
         // appunti letti solo qui, all'apertura del menu: mai durante un drag
         if (ClipboardMenu() is { } clipboard) items.Add(clipboard);
-        items.Add(new Forms.ToolStripMenuItem("Come si usa", null, (_, _) => new WelcomeWindow().Show()));
-        items.Add(new Forms.ToolStripMenuItem("Impostazioni…", null, (_, _) => ShowSettings()));
-        items.Add(new Forms.ToolStripMenuItem("Esci", null, (_, _) => Shutdown()));
+        items.Add(new Forms.ToolStripMenuItem(T("Come si usa", "How to use"), null, (_, _) => new WelcomeWindow().Show()));
+        items.Add(new Forms.ToolStripMenuItem(T("Impostazioni…", "Settings…"), null, (_, _) => ShowSettings()));
+        items.Add(new Forms.ToolStripMenuItem(T("Esci", "Quit"), null, (_, _) => Shutdown()));
     }
 
     void ShowSettings()
@@ -288,6 +292,14 @@ public partial class App : Application
                 _settings.ExplorerMenu = on;
                 _settings.Save();
                 SetExplorerMenu(on);
+            },
+            _settings.Language, language =>
+            {
+                _settings.Language = language;
+                _settings.Save();
+                Lang.Apply(language);
+                SetExplorerMenu(_settings.ExplorerMenu); // le voci di Esplora file vanno riscritte nella nuova lingua
+                Dispatcher.BeginInvoke(() => { _settingsWindow?.Close(); ShowSettings(); }); // la finestra si riapre già tradotta
             },
             LibreOfficeEngine.Find(), LogFolder);
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
@@ -312,7 +324,7 @@ public partial class App : Application
         var ops = files is not null ? RingsFor(files)[(int)Ring.Convert] : isImage ? RingsFor(["appunti.png"])[(int)Ring.Convert] : [];
         if (ops.Count == 0) return null;
 
-        var menu = new Forms.ToolStripMenuItem("Converti dagli appunti");
+        var menu = new Forms.ToolStripMenuItem(T("Converti dagli appunti", "Convert from clipboard"));
         foreach (var op in ops)
             menu.DropDownItems.Add(op.Label, null, (_, _) =>
             {
@@ -327,7 +339,7 @@ public partial class App : Application
     {
         using var image = Forms.Clipboard.GetImage();
         if (image is null) return null;
-        var path = OutputPath.Next(Path.Combine(DownloadsFolder(), $"Appunti {DateTime.Now:yyyy-MM-dd HH.mm.ss}.png"), "png");
+        var path = OutputPath.Next(Path.Combine(DownloadsFolder(), $"{T("Appunti", "Clipboard")} {DateTime.Now:yyyy-MM-dd HH.mm.ss}.png"), "png");
         image.Save(path, System.Drawing.Imaging.ImageFormat.Png);
         return path;
     }

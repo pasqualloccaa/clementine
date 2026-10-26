@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Clementine.Core;
 using Microsoft.Win32;
+using static Clementine.Core.Lang;
 
 namespace Clementine.App.Shell;
 
@@ -52,7 +53,7 @@ public static class ContextMenu
         {
             var item = $@"{items}\shell\{i + 1:D2}";
             // in una lista unica "PNG" da solo si confonderebbe con gli strumenti
-            entries.Add((item, "MUIVerb", ops[i].Ring == (int)Ring.Convert ? $"Converti in {ops[i].Op.Label}" : ops[i].Op.Label));
+            entries.Add((item, "MUIVerb", ops[i].Ring == (int)Ring.Convert ? T($"Converti in {ops[i].Op.Label}", $"Convert to {ops[i].Op.Label}") : ops[i].Op.Label));
             if (i > 0 && ops[i].Ring != ops[i - 1].Ring) entries.Add((item, "CommandFlags", SeparatorBefore.ToString())); // linea tra gli anelli
             entries.Add(($@"{item}\command", "", $"\"{exe}\" --op {ops[i].Op.Id} \"%1\""));
         }

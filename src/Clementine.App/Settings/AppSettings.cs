@@ -20,6 +20,8 @@ public sealed class AppSettings
     public bool ExplorerMenu { get; set; } = true;
     public bool WelcomeShown { get; set; }
     public bool RecordMicrophone { get; set; }
+    /// <summary>"auto" (come Windows), "it" o "en": vedi Lang.Apply.</summary>
+    public string Language { get; set; } = "auto";
     public List<RecentItem> Recent { get; set; } = [];
 
     public void AddRecent(RecentItem item)

@@ -147,7 +147,8 @@ Copia in…, Sposta in…, Copia percorso, Apri terminale qui, Condividi (Nearby
   (`--uninstall`). Crea anche `.build\Clementine-win-x64.zip`, da allegare alla release GitHub; `install.ps1` (da terminale,
   `irm … | iex`) scarica lo zip dell'ultima release e lancia `--install`. Niente Inno Setup: Smart App Control bloccava il suo eseguibile temporaneo non firmato.
 - Log in `%APPDATA%\Clementine\logs\` con Serilog.
-- UI in italiano e inglese (resx).
+- UI in italiano e inglese: ogni testo è scritto in coppia, `Lang.T("Annulla", "Cancel")` (XAML: `{app:T 'Annulla', 'Cancel'}`),
+  niente .resx. Lingua come Windows o scelta nelle Impostazioni; cambia subito, suffissi dei file compresi.
 
 ## Milestone
 1. **Isola + ruota**: isola flottante con aggancio ai bordi, tray, `DragEnter` apre la ruota con spicchi finti, `Drop` stampa i path ricevuti e lo spicchio scelto, `DragLeave` richiude. Nessuna conversione.

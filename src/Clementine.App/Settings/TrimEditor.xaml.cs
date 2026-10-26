@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
+using static Clementine.Core.Lang;
 
 namespace Clementine.App.Settings;
 
@@ -22,7 +23,7 @@ public partial class TrimEditor : Window
     {
         InitializeComponent();
         Theme.Apply(this);
-        Title = $"Taglia – {Path.GetFileName(file)}";
+        Title = T($"Taglia – {Path.GetFileName(file)}", $"Trim – {Path.GetFileName(file)}");
         Player.Source = new Uri(file);
         Player.MediaOpened += (_, _) =>
         {
@@ -67,7 +68,7 @@ public partial class TrimEditor : Window
         Timeline.SelectionStart = _start;
         Timeline.SelectionEnd = _end;
         Position.Text = $"{Clock(seconds)} / {Clock(Timeline.Maximum)}";
-        Selection.Text = $"Tieni da {Clock(_start)} a {Clock(_end)}  ({_end - _start:0.0} s)";
+        Selection.Text = T($"Tieni da {Clock(_start)} a {Clock(_end)}  ({_end - _start:0.0} s)", $"Keep {Clock(_start)} to {Clock(_end)}  ({_end - _start:0.0} s)");
     }
 
     static string Clock(double seconds) => TimeSpan.FromSeconds(seconds).ToString(seconds >= 3600 ? @"h\:mm\:ss\.f" : @"m\:ss\.f", CultureInfo.InvariantCulture);
@@ -80,7 +81,7 @@ public partial class TrimEditor : Window
             Player.Play();
             _tick.Start();
             _playing = true;
-            PlayButton.Content = "⏸  Pausa";
+            PlayButton.Content = T("⏸  Pausa", "⏸  Pause");
         }
     }
 
@@ -89,7 +90,7 @@ public partial class TrimEditor : Window
         Player.Pause();
         _tick.Stop();
         _playing = false;
-        PlayButton.Content = "▶  Riproduci";
+        PlayButton.Content = T("▶  Riproduci", "▶  Play");
         ShowPosition(Player.Position.TotalSeconds);
     }
 
