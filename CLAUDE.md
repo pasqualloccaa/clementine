@@ -130,6 +130,7 @@ Clementine/
 - Video: comprimi, trim, crop, velocità, split, join, estrai fotogrammi, estrai audio.
 - Audio: normalizza (EBU R128), trim, bleep, mono/stereo.
 - PDF: unisci, dividi, riordina, comprimi, estrai testo.
+- Archivi: estrai, in una cartella con il nome dell'archivio accanto all'originale (voci "../" rifiutate).
 - Tutti: leggi/modifica/rimuovi metadati, leggi QR.
 
 ### Azioni (ruota Alt)

@@ -14,7 +14,7 @@ public static class OutputPath
         var isFolder = Directory.Exists(input);
         var name = isFolder ? Path.GetFileName(input) : Path.GetFileNameWithoutExtension(input);
         if (!isFolder && name.EndsWith(".tar", StringComparison.OrdinalIgnoreCase)) name = name[..^4]; // archivio.tar.gz → archivio.zip
-        if (suffix is not null) name += $" ({suffix})";
+        if (!string.IsNullOrEmpty(suffix)) name += $" ({suffix})"; // "" = nessun suffisso anche per le cartelle (Estrai: "Foto.zip" → "Foto")
         var ext = extension is null ? "" : $".{extension}";
 
         var path = Path.Combine(dir, name + ext);

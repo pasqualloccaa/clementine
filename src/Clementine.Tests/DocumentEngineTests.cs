@@ -121,6 +121,43 @@ public class ArchiveEngineTests
         Assert.Equal("secondo", entries["sub/b.txt"]);
         Assert.All(reports, p => Assert.InRange(p, 0, 1));
     }
+
+    static readonly Operation Extract = new("tool:extract", "Estrai", FileKind.Archive, null, "");
+
+    [Fact]
+    public async Task Extract_KeepsFolders()
+    {
+        using var dir = new TempDir();
+        var zip = Path.Combine(dir.Path, "Foto.zip");
+        using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
+        {
+            using (var w = new StreamWriter(archive.CreateEntry("a.txt").Open())) w.Write("primo");
+            using (var w = new StreamWriter(archive.CreateEntry("sub/b.txt").Open())) w.Write("secondo");
+        }
+        var output = Path.Combine(dir.Path, "out");
+
+        await new ArchiveEngine().RunAsync(new Job(zip, Extract, output), new Progress<double>(), default);
+
+        Assert.Equal("primo", File.ReadAllText(Path.Combine(output, "a.txt")));
+        Assert.Equal("secondo", File.ReadAllText(Path.Combine(output, "sub", "b.txt")));
+        Assert.Equal(Path.Combine(dir.Path, "Foto"), OutputPath.Next(zip, null, Extract.Suffix)); // la cartella prende il nome dell'archivio
+        Assert.Equal(Path.Combine(dir.Path, "Foto"), OutputPath.Next(Path.Combine(dir.Path, "Foto.tar.gz"), null, ""));
+    }
+
+    // "zip slip": una voce "../" non deve poter scrivere fuori dalla cartella di destinazione
+    [Fact]
+    public async Task Extract_RefusesEntriesOutsideTheFolder()
+    {
+        using var dir = new TempDir();
+        var zip = Path.Combine(dir.Path, "cattivo.zip");
+        using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
+        using (var w = new StreamWriter(archive.CreateEntry("../fuori.txt").Open())) w.Write("x");
+        var output = Path.Combine(dir.Path, "dentro", "out");
+
+        await Assert.ThrowsAnyAsync<Exception>(() => new ArchiveEngine().RunAsync(new Job(zip, Extract, output), new Progress<double>(), default));
+
+        Assert.False(File.Exists(Path.Combine(dir.Path, "dentro", "fuori.txt")));
+    }
 }
 
 public class SubtitleEngineTests

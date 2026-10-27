@@ -54,6 +54,9 @@ public static class Toolbox
                     tools.Add(new("tool:trim", T("Taglia…", "Trim…"), kind, null, T("tagliato", "trimmed")));
                     tools.Add(new("tool:mono", "Mono", kind, null, "mono"));
                     break;
+                case FileKind.Archive:
+                    tools.Add(new("tool:extract", T("Estrai", "Extract"), kind, null, "")); // una cartella con il nome dell'archivio, lì accanto
+                    break;
                 case FileKind.Pdf:
                     tools.Add(MergePdf);
                     tools.Add(new("tool:split-pdf", T("Dividi", "Split"), kind, "pdf", T("pagine", "pages")));

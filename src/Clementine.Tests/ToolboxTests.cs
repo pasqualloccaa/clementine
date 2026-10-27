@@ -16,6 +16,10 @@ public class ToolboxTests
     }
 
     [Fact]
+    public void Archives_CanBeExtracted() =>
+        Assert.Equal(["tool:extract", "tool:zip"], Tools("Foto.zip"));
+
+    [Fact]
     public void MixedKinds_OnlyCommonTools()
     {
         using var dir = new TempDir();

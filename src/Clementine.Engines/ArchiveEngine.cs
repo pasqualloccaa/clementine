@@ -18,8 +18,26 @@ public sealed class ArchiveEngine : IEngine
     public Task RunAsync(Job job, IProgress<double> progress, CancellationToken ct)
     {
         if (job.Op.Id == Toolbox.Zip.Id) Zip(job, progress, ct);
+        else if (job.Op.Id == "tool:extract") Extract(job, progress, ct);
         else Repack(job, progress, ct);
         return Task.CompletedTask;
+    }
+
+    /// <summary>Tutto l'archivio in una cartella (job.Output). SharpCompress rifiuta le voci che uscirebbero dalla cartella ("../").</summary>
+    static void Extract(Job job, IProgress<double> progress, CancellationToken ct)
+    {
+        Directory.CreateDirectory(job.Output);
+        using var input = File.OpenRead(job.Input);
+        using var reader = ReaderFactory.OpenReader(input, new ReaderOptions());
+        while (reader.MoveToNextEntry())
+        {
+            ct.ThrowIfCancellationRequested();
+            if (reader.Entry.IsDirectory) continue;
+            if (reader.Entry.Key is null) // un .gz semplice può non avere nome: si usa quello dell'archivio senza ".gz"
+                reader.WriteEntryToFile(Path.Combine(job.Output, Path.GetFileNameWithoutExtension(job.Input)));
+            else reader.WriteEntryToDirectory(job.Output, new ExtractionOptions { ExtractFullPath = true, Overwrite = false });
+            progress.Report((double)input.Position / input.Length);
+        }
     }
 
     static void Zip(Job job, IProgress<double> progress, CancellationToken ct)
