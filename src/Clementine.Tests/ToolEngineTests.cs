@@ -142,6 +142,13 @@ public class ToolEngineTests
         var frames = Path.Combine(dir.Path, "frames.jpg");
         await engine.RunAsync(new Job(mov, Tool(mov, "tool:frames"), frames), NoProgress, default);
         Assert.InRange(Directory.GetFiles(frames, "*.jpg").Length, 3, 4);
+
+        // "%" nel nome del video e quindi nella cartella temporanea della coda: per ffmpeg è l'inizio di un contatore
+        var percent = Path.Combine(dir.Path, "Sconto 50%.mov");
+        File.Copy(mov, percent);
+        var percentFrames = Path.Combine(dir.Path, "~Sconto 50%.1a2b3c4d.jpg");
+        await engine.RunAsync(new Job(percent, Tool(percent, "tool:frames"), percentFrames), NoProgress, default);
+        Assert.Contains(Path.Combine(percentFrames, "Sconto 50% - 0001.jpg"), Directory.GetFiles(percentFrames, "*.jpg"));
     }
 
     [Fact]
