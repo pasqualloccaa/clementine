@@ -44,8 +44,10 @@ public sealed class FfmpegEngine(string ffmpegDir) : IEngine
         };
         if (job.Op.Id == "tool:frames")
         {
-            // un JPG al secondo, in una cartella
-            output = Path.Combine(Directory.CreateDirectory(job.Output).FullName, $"{Path.GetFileNameWithoutExtension(job.Input)} - %04d.jpg");
+            // un JPG al secondo, in una cartella. Tutto il percorso è un modello di ffmpeg ("%04d" è il contatore):
+            // un "%" nel nome del video o delle cartelle ("Sconto 50%") va scritto "%%"
+            var pattern = Path.Combine(Directory.CreateDirectory(job.Output).FullName, Path.GetFileNameWithoutExtension(job.Input));
+            output = pattern.Replace("%", "%%") + " - %04d.jpg";
         }
 
         string[] args = ["-hide_banner", "-nostdin", "-n", .. input, "-i", job.Input, "-sn", .. codec, "-progress", "pipe:1", "-nostats", output];
